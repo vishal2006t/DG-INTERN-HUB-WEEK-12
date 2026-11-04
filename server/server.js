@@ -94,6 +94,31 @@ app.use('/api/auth', authLimiter);
 app.use(express.json({ limit: '15kb' }));
 app.use(express.urlencoded({ extended: true, limit: '15kb' }));
 
+// Root Welcome & API Status Endpoint
+app.get('/', (req, res) => {
+  const dbStatus = getConnectionStatus();
+  res.status(200).json({
+    success: true,
+    name: 'DG Interns Hub Backend API',
+    version: '11.0.0',
+    status: 'online',
+    database: {
+      connected: dbStatus.isConnected,
+      state: dbStatus.state
+    },
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      jobs: '/api/jobs',
+      applications: '/api/applications',
+      users: '/api/users',
+      notifications: '/api/notifications',
+      analytics: '/api/analytics'
+    },
+    documentation: 'https://github.com/vishal2006t/DG-INTERN-HUB-WEEK-11'
+  });
+});
+
 // Health Check endpoint
 app.get('/api/health', (req, res) => {
   const dbStatus = getConnectionStatus();

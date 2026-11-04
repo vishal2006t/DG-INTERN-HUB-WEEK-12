@@ -8,6 +8,7 @@
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
     "server": "node server/server.js",
     "server:watch": "node --watch server/server.js",
+    "backend": "node backend/server.js",
     "start": "node server/server.js",
     "build": "vite build && node -e \"const fs = require('fs'); fs.copyFileSync('dist/index.html', 'dist/404.html'); fs.cpSync('dist', 'docs', { recursive: true }); fs.cpSync('dist/assets', 'assets', { recursive: true });\"",
     "lint": "oxlint",

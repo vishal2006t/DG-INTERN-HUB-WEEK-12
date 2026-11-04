@@ -1,6 +1,6 @@
-# DG Interns Hub - REST API Documentation (Week 10 Release)
+# DG Interns Hub - REST API Documentation (Week 11 Release)
 
-Welcome to the official REST API documentation for the **DG Interns Hub Backend Application** (Week 10 Advanced Upgrade). This production-grade API powers user authentication, role-based workflows, internship listing exploration, search, filtering, pagination, sorting, persistent in-app notifications, platform analytics, CSV data export, and end-to-end application tracking.
+Welcome to the official REST API documentation for the **DG Interns Hub Backend Application** (Week 11 Production Release). This production-grade API powers user authentication, role-based workflows, internship listing exploration, search, filtering, pagination, sorting, persistent in-app notifications, platform analytics, CSV data export, and end-to-end application tracking.
 
 ---
 
