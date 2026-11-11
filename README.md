@@ -1,4 +1,6 @@
-# DG Interns Hub — Week 12 Final Full-Stack Capstone Application
+# DG-INTERN-HUB-WEEK-12 — Final Full-Stack Capstone Application
+
+**GitHub Repository:** [https://github.com/vishal2006t/DG-INTERN-HUB-WEEK-12](https://github.com/vishal2006t/DG-INTERN-HUB-WEEK-12)  
 
 [![React](https://img.shields.io/badge/React-19.x-blue.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-purple.svg)](https://vitejs.dev/)
