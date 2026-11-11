@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="./assets/dg-interns-hub-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="DG Interns Hub - Modern SaaS recruitment platform connecting students, freshers, and recruiters with verified internships and tech roles." />
+    <title>DG Interns Hub | Talent & Internship Recruitment Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dg_theme');
+          var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime.js">
+    <link rel="modulepreload" crossorigin href="./assets/icons-vendor.js">
+    <link rel="modulepreload" crossorigin href="./assets/react-vendor.js">
+    <link rel="stylesheet" crossorigin href="./assets/index.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Fallback for static GitHub Pages root deployment where ./src/main.jsx is unbundled
+      if (window.location.hostname.includes('github.io') && !document.querySelector('script[src*="assets/index.js"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.crossOrigin = 'anonymous';
+        link.href = './assets/index.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.crossOrigin = 'anonymous';
+        script.src = './assets/index.js';
+        document.body.appendChild(script);
+      }
+    </script>
+  </body>
+</html>
