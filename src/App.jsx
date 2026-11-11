@@ -1,24 +1,18 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import ApplicationForm from './components/ApplicationForm';
-import AuthModal from './components/AuthModal';
-import MyApplicationsModal from './components/MyApplicationsModal';
-import PostJobModal from './components/PostJobModal';
 import Toast from './components/Toast';
 import Loader from './components/Loader';
 import ProtectedRoute from './routes/ProtectedRoute';
 
-// Global Context Providers
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { SavedJobsProvider } from './context/SavedJobsContext';
 import { ToastProvider } from './context/ToastContext';
-import { jobsData } from './data/jobs';
 
-// Performance Optimization: Route-level code splitting via dynamic imports
+// Code-split pages and heavy modals via React.lazy
 const Home = lazy(() => import('./pages/Home'));
 const Jobs = lazy(() => import('./pages/Jobs'));
 const JobDetailsPage = lazy(() => import('./pages/JobDetailsPage'));
@@ -26,167 +20,152 @@ const Contact = lazy(() => import('./pages/Contact'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Applications = lazy(() => import('./pages/Applications'));
 const Profile = lazy(() => import('./pages/Profile'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const SavedJobs = lazy(() => import('./pages/SavedJobs'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
+const ApplicationForm = lazy(() => import('./components/ApplicationForm'));
+const AuthModal = lazy(() => import('./components/AuthModal'));
+const MyApplicationsModal = lazy(() => import('./components/MyApplicationsModal'));
+const PostJobModal = lazy(() => import('./components/PostJobModal'));
+
 import './App.css';
 import './styles/week9-pages.css';
+import './styles/saas-redesign.css';
 
-// Automatically scroll to top on route change
-function ScrollToTop() {
+const ScrollToTop = () => {
   const { pathname } = useLocation();
-
   useEffect(() => {
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }, [pathname]);
-
   return null;
-}
+};
 
 function App() {
-  // Modal states
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [isMyAppsOpen, setIsMyAppsOpen] = useState(false);
   const [isPostJobOpen, setIsPostJobOpen] = useState(false);
 
-  const handleOpenApplyModal = (job = null) => {
-    setSelectedJob(job || jobsData[0]);
+  const handleOpenApplyModal = useCallback((job = null) => {
+    if (!job) return;
+    setSelectedJob(job);
     setIsApplyModalOpen(true);
-  };
+  }, []);
 
-  const handleCloseApplyModal = () => {
+  const handleCloseApplyModal = useCallback(() => {
     setIsApplyModalOpen(false);
-  };
+    setSelectedJob(null);
+  }, []);
+
+  const handleOpenPostJob = useCallback(() => {
+    setIsPostJobOpen(true);
+  }, []);
 
   return (
     <HashRouter>
-      <AuthProvider>
-        <ThemeProvider>
+      <ThemeProvider>
+        <AuthProvider>
           <NotificationProvider>
             <SavedJobsProvider>
               <ToastProvider>
                 <ScrollToTop />
-                <div className="app-layout">
-                  {/* Navigation Bar */}
-                  <Navbar 
+                <div className="app-wrapper" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                  <Navbar
                     onOpenMyApplications={() => setIsMyAppsOpen(true)}
-                    onOpenPostJob={() => setIsPostJobOpen(true)}
+                    onOpenPostJob={handleOpenPostJob}
                   />
 
-                  {/* Main Content Area with Lazy-loaded Route Suspense */}
-                  <main className="main-content" id="main-content">
-                    <Suspense
-                      fallback={
-                        <div
-                          style={{
-                            minHeight: '60vh',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                        >
-                          <Loader type="spinner" text="Loading content..." />
-                        </div>
-                      }
-                    >
+                  <main className="main-content" id="main-content" style={{ flex: 1 }}>
+                    <Suspense fallback={<Loader type="spinner" fullScreen text="Loading view..." />}>
                       <Routes>
-                        <Route 
-                          path="/" 
-                          element={<Home onApplyJob={handleOpenApplyModal} />} 
-                        />
-                        <Route 
-                          path="/jobs" 
-                          element={<Jobs onApplyJob={handleOpenApplyModal} />} 
-                        />
-                        <Route 
-                          path="/jobs/:id" 
-                          element={<JobDetailsPage onApplyJob={handleOpenApplyModal} />} 
-                        />
-                        <Route 
-                          path="/contact" 
-                          element={<Contact />} 
-                        />
+                        <Route path="/" element={<Home onApplyJob={handleOpenApplyModal} />} />
+                        <Route path="/jobs" element={<Jobs onApplyJob={handleOpenApplyModal} />} />
+                        <Route path="/jobs/:id" element={<JobDetailsPage onApplyJob={handleOpenApplyModal} />} />
+                        <Route path="/saved-jobs" element={<SavedJobs onApplyJob={handleOpenApplyModal} onOpenPostJob={handleOpenPostJob} />} />
+                        <Route path="/contact" element={<Contact />} />
 
-                        {/* Protected Routes (Role-aware) */}
-                        <Route 
-                          path="/dashboard" 
+                        <Route
+                          path="/dashboard"
                           element={
                             <ProtectedRoute>
-                              <Dashboard onOpenPostJob={() => setIsPostJobOpen(true)} />
+                              <Dashboard onOpenPostJob={handleOpenPostJob} />
                             </ProtectedRoute>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/applications" 
+                        <Route
+                          path="/applications"
                           element={
                             <ProtectedRoute allowedRoles={['candidate', 'admin']}>
-                              <Applications />
+                              <Applications onOpenPostJob={handleOpenPostJob} />
                             </ProtectedRoute>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/profile" 
+                        <Route
+                          path="/profile"
                           element={
                             <ProtectedRoute>
-                              <Profile />
+                              <Profile onOpenPostJob={handleOpenPostJob} />
                             </ProtectedRoute>
-                          } 
+                          }
+                        />
+                        <Route
+                          path="/notifications"
+                          element={
+                            <ProtectedRoute>
+                              <Notifications onOpenPostJob={handleOpenPostJob} />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/settings"
+                          element={
+                            <ProtectedRoute>
+                              <Settings onOpenPostJob={handleOpenPostJob} />
+                            </ProtectedRoute>
+                          }
                         />
 
-                        {/* Authentication Routes */}
-                        <Route 
-                          path="/login" 
-                          element={<Login />} 
-                        />
-                        <Route 
-                          path="/register" 
-                          element={<Register />} 
-                        />
-
-                        {/* 404 Fallback route */}
-                        <Route 
-                          path="*" 
-                          element={<NotFound />} 
-                        />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route path="*" element={<NotFound />} />
                       </Routes>
                     </Suspense>
                   </main>
 
-                  {/* Footer */}
                   <Footer />
 
-                  {/* Global Application Modal */}
-                  <ApplicationForm
-                    isOpen={isApplyModalOpen}
-                    job={selectedJob}
-                    onClose={handleCloseApplyModal}
-                  />
+                  <Suspense fallback={null}>
+                    <ApplicationForm
+                      isOpen={isApplyModalOpen}
+                      job={selectedJob}
+                      onClose={handleCloseApplyModal}
+                    />
+                    <AuthModal />
+                    <MyApplicationsModal
+                      isOpen={isMyAppsOpen}
+                      onClose={() => setIsMyAppsOpen(false)}
+                    />
+                    <PostJobModal
+                      isOpen={isPostJobOpen}
+                      onClose={() => setIsPostJobOpen(false)}
+                      onSuccess={() => {
+                        setIsPostJobOpen(false);
+                        window.dispatchEvent(new CustomEvent('dg:jobs-updated'));
+                      }}
+                    />
+                  </Suspense>
 
-                  {/* Global Auth Modal */}
-                  <AuthModal />
-
-                  {/* Candidate Applications Modal */}
-                  <MyApplicationsModal
-                    isOpen={isMyAppsOpen}
-                    onClose={() => setIsMyAppsOpen(false)}
-                  />
-
-                  {/* Recruiter Post Job Modal */}
-                  <PostJobModal
-                    isOpen={isPostJobOpen}
-                    onClose={() => setIsPostJobOpen(false)}
-                  />
-
-                  {/* Global Toast Notifications */}
                   <Toast />
                 </div>
               </ToastProvider>
             </SavedJobsProvider>
           </NotificationProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </HashRouter>
   );
 }

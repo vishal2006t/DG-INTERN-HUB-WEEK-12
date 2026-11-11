@@ -1,404 +1,487 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Building, 
-  Save, 
-  Plus, 
-  X, 
-  Trash2, 
-  ShieldCheck,
-  Calendar
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  GraduationCap,
+  Building2,
+  FileText,
+  Upload,
+  Save,
+  ExternalLink,
+  CheckCircle2,
+  Trash2,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import { api } from '../services/api';
-import Button from '../components/Button';
-import InputField from '../components/InputField';
+import WorkspaceLayout from '../components/WorkspaceLayout';
 import Loader from '../components/Loader';
-import Modal from '../components/Modal';
+import { useAuth, useToast } from '../hooks/useContexts';
+import api, { API_BASE_URL } from '../services/api';
 
-const Profile = () => {
-  const { user, updateUserProfile, logout } = useAuth();
-  const { success, error: toastError } = useToast();
-  const navigate = useNavigate();
+const Profile = ({ onOpenPostJob }) => {
+  const { user, updateUserProfile } = useAuth();
+  const toast = useToast();
 
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    bio: '',
-    companyName: '',
-    skills: []
-  });
-
-  const [newSkill, setNewSkill] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    location: '',
+    headline: '',
+    education: '',
+    companyName: '',
+    skills: '',
+    bio: '',
+    resumeUrl: '',
+  });
 
-  // Hydrate user profile from backend
-  useEffect(() => {
-    const loadProfile = async () => {
-      setLoading(true);
-      try {
-        const res = await api.users.getProfile();
-        const profile = res?.data?.user || res?.data || user;
-        if (profile) {
-          setFormData({
-            name: profile.name || '',
-            email: profile.email || '',
-            phone: profile.phone || '',
-            bio: profile.bio || '',
-            companyName: profile.companyName || '',
-            skills: Array.isArray(profile.skills) ? profile.skills : []
-          });
-        }
-      } catch (err) {
-        console.warn('Profile fetch warning (using auth user):', err.message);
-        if (user) {
-          setFormData({
-            name: user.name || '',
-            email: user.email || '',
-            phone: user.phone || '',
-            bio: user.bio || '',
-            companyName: user.companyName || '',
-            skills: Array.isArray(user.skills) ? user.skills : []
-          });
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+  const backendOrigin = useMemo(() => API_BASE_URL.replace(/\/api\/?$/, ''), []);
 
-    loadProfile();
-  }, [user]);
+  const hydrateFromProfile = useCallback((p) => {
+    if (!p) return;
+    setFormData({
+      name: p.name || '',
+      phone: p.phone || '',
+      location: p.location || '',
+      headline: p.headline || '',
+      education: p.education || '',
+      companyName: p.companyName || '',
+      skills: Array.isArray(p.skills) ? p.skills.join(', ') : '',
+      bio: p.bio || '',
+      resumeUrl: p.resumeUrl || '',
+    });
+  }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleAddSkill = (e) => {
-    e.preventDefault();
-    const skillTrimmed = newSkill.trim();
-    if (!skillTrimmed) return;
-
-    if (formData.skills.some((s) => s.toLowerCase() === skillTrimmed.toLowerCase())) {
-      toastError(`"${skillTrimmed}" is already in your skills list.`);
-      return;
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.users.getProfile();
+      const profileData = res?.data?.user || res?.data || user;
+      hydrateFromProfile(profileData);
+      if (profileData) updateUserProfile(profileData);
+    } catch {
+      hydrateFromProfile(user);
+    } finally {
+      setLoading(false);
     }
+  }, [hydrateFromProfile, updateUserProfile, user]);
 
-    setFormData((prev) => ({
-      ...prev,
-      skills: [...prev.skills, skillTrimmed]
-    }));
-    setNewSkill('');
-  };
+  useEffect(() => {
+    loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleRemoveSkill = (skillToRemove) => {
-    setFormData((prev) => ({
-      ...prev,
-      skills: prev.skills.filter((s) => s !== skillToRemove)
-    }));
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      toastError('Name cannot be empty.');
+      toast.error('Full name cannot be empty.');
       return;
     }
 
     setSaving(true);
     try {
-      const res = await api.users.updateProfile({
+      const payload = {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
-        bio: formData.bio.trim(),
+        location: formData.location.trim(),
+        headline: formData.headline.trim(),
+        education: formData.education.trim(),
         companyName: formData.companyName.trim(),
+        bio: formData.bio.trim(),
         skills: formData.skills
-      });
-
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        resumeUrl: formData.resumeUrl,
+      };
+      const res = await api.users.updateProfile(payload);
       const updatedUser = res?.data?.user || res?.data;
       if (updatedUser) {
         updateUserProfile(updatedUser);
+        hydrateFromProfile(updatedUser);
       }
-      success('Profile updated successfully!');
+      toast.success('Profile details saved successfully.');
     } catch (err) {
-      toastError(err.message || 'Unable to update profile.');
+      toast.error(err.message || 'Unable to save profile.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDeleteAccount = async () => {
-    setDeleting(true);
+  const handleResumeUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Only PDF files (.pdf) are allowed for resume uploads.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Resume file size must be 5 MB or less.');
+      return;
+    }
+
+    setUploadingResume(true);
     try {
-      await api.users.deleteProfile();
-      await logout();
-      success('Account deleted successfully.');
-      navigate('/');
+      const uploadRes = await api.applications.uploadResume(file);
+      const uploadedUrl = uploadRes?.data?.resumeUrl || uploadRes?.resumeUrl || '';
+      if (!uploadedUrl) {
+        throw new Error('Server did not return a resume URL.');
+      }
+
+      const updateRes = await api.users.updateProfile({ resumeUrl: uploadedUrl });
+      const updatedUser = updateRes?.data?.user || updateRes?.data;
+      if (updatedUser) {
+        updateUserProfile(updatedUser);
+      }
+      setFormData((prev) => ({ ...prev, resumeUrl: uploadedUrl }));
+      toast.success('PDF resume uploaded and linked to your profile!');
     } catch (err) {
-      toastError(err.message || 'Failed to delete account.');
-      setDeleting(false);
-      setDeleteModalOpen(false);
+      toast.error(err.message || 'Resume upload failed.');
+    } finally {
+      setUploadingResume(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="container py-16 flex justify-center">
-        <Loader type="spinner" text="Loading your profile..." />
-      </div>
-    );
-  }
+  const handleRemoveResume = async () => {
+    setUploadingResume(true);
+    try {
+      const updateRes = await api.users.updateProfile({ resumeUrl: '' });
+      const updatedUser = updateRes?.data?.user || updateRes?.data;
+      if (updatedUser) updateUserProfile(updatedUser);
+      setFormData((prev) => ({ ...prev, resumeUrl: '' }));
+      toast.info('Resume removed from your profile.');
+    } catch (err) {
+      toast.error(err.message || 'Unable to remove resume.');
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const resolveResumeUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${backendOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const initials = (formData.name || user?.name || 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('');
+
+  const resumeHref = resolveResumeUrl(formData.resumeUrl);
 
   return (
-    <div className="profile-page-container container">
-      <div className="profile-layout-grid">
-        {/* Left Column: Account Overview Card */}
-        <div className="profile-overview-col">
-          <div className="profile-summary-box">
-            <div className="profile-large-avatar">
-              {formData.name ? formData.name.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <h2 className="profile-user-name">{formData.name}</h2>
-            <p className="profile-user-email">{formData.email}</p>
-            <div className="mt-2">
-              <span className="badge badge-blue">
-                {user?.role ? user.role.toUpperCase() : 'CANDIDATE'}
-              </span>
-            </div>
-
-            <div className="profile-metadata-divider" />
-
-            <div className="profile-meta-lines">
-              <div className="meta-line">
-                <ShieldCheck size={16} className="text-success" />
-                <span>Verified Candidate Account</span>
-              </div>
-              <div className="meta-line">
-                <Calendar size={16} className="text-muted" />
-                <span>
-                  Member since {user?.createdAt ? new Date(user.createdAt).getFullYear() : '2026'}
-                </span>
-              </div>
-            </div>
-
-            <div className="profile-metadata-divider" />
-
-            {/* Quick Skills Display */}
-            <div className="profile-skills-summary">
-              <h4 className="skills-subhead">Top Skills ({formData.skills.length})</h4>
-              <div className="skills-tags-cluster">
-                {formData.skills.length > 0 ? (
-                  formData.skills.map((skill, index) => (
-                    <span key={index} className="skill-pill">
-                      {skill}
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-muted text-xs">No skills listed yet. Add skills on the right.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Edit Profile Form */}
-        <div className="profile-edit-col">
-          <div className="profile-edit-card">
-            <div className="card-header-line">
-              <h1 className="profile-heading">Profile & Preferences</h1>
-              <p className="profile-subheading">Update your candidate information and technical skill tags</p>
-            </div>
-
-            <form onSubmit={handleSubmit} noValidate className="profile-form">
-              <div className="form-grid-2col">
-                <InputField
-                  label="Full Name"
-                  id="profile-name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Your full name"
-                  icon={<User size={16} />}
-                  required
-                />
-
-                <InputField
-                  label="Email Address"
-                  id="profile-email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="name@domain.com"
-                  icon={<Mail size={16} />}
-                  disabled
-                  helperText="Primary account email cannot be altered."
-                />
-              </div>
-
-              <div className="form-grid-2col">
-                <InputField
-                  label="Phone Number"
-                  id="profile-phone"
-                  name="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="+91 98765 43210"
-                  icon={<Phone size={16} />}
-                  helperText="Visible to recruiters for interview scheduling."
-                />
-
-                {user?.role === 'recruiter' && (
-                  <InputField
-                    label="Company Name"
-                    id="profile-company"
-                    name="companyName"
-                    value={formData.companyName}
-                    onChange={handleChange}
-                    placeholder="Your organization name"
-                    icon={<Building size={16} />}
-                  />
-                )}
-              </div>
-
-              <InputField
-                label="Headline & Professional Bio"
-                id="profile-bio"
-                name="bio"
-                type="textarea"
-                rows={3}
-                value={formData.bio}
-                onChange={handleChange}
-                placeholder="Share your technical interests, career focus, and aspirations..."
-                helperText="Summarize your background in 2-3 sentences."
-              />
-
-              {/* Skills Tag Management */}
-              <div className="skills-management-section">
-                <label className="form-label" htmlFor="skill-input">
-                  Technical Skills & Technologies
-                </label>
-                <div className="skill-input-row">
-                  <input
-                    type="text"
-                    id="skill-input"
-                    value={newSkill}
-                    onChange={(e) => setNewSkill(e.target.value)}
-                    placeholder="e.g. React.js, Node.js, Python, Figma"
-                    className="form-input flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddSkill(e);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    icon={<Plus size={16} />}
-                    onClick={handleAddSkill}
-                  >
-                    Add Skill
-                  </Button>
-                </div>
-
-                {/* Skill Badges with Delete button */}
-                <div className="active-skills-list mt-3">
-                  {formData.skills.map((skill, index) => (
-                    <span key={index} className="editable-skill-badge">
-                      <span>{skill}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSkill(skill)}
-                        aria-label={`Remove ${skill}`}
-                        className="skill-remove-btn"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Save Button */}
-              <div className="profile-form-footer">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  loading={saving}
-                  icon={<Save size={16} />}
-                  id="save-profile-btn"
-                >
-                  Save Profile Changes
-                </Button>
-              </div>
-            </form>
-
-            {/* Danger Zone */}
-            <div className="profile-danger-zone">
-              <h3 className="danger-heading">Danger Zone</h3>
-              <p className="danger-desc">
-                Permanently delete your account and all associated applications. This action is irreversible.
-              </p>
-              <Button
-                variant="danger"
-                size="sm"
-                icon={<Trash2 size={14} />}
-                onClick={() => setDeleteModalOpen(true)}
-                id="delete-account-btn"
-              >
-                Delete Account
-              </Button>
-            </div>
-          </div>
+    <WorkspaceLayout title="Profile & Resume" onOpenPostJob={onOpenPostJob}>
+      <div className="saas-page-header">
+        <div>
+          <h1 className="saas-page-title">Profile & Resume</h1>
+          <p className="saas-page-subtitle">
+            Keep your qualifications, skills, and default PDF resume ready for instant applications.
+          </p>
         </div>
       </div>
 
-      {/* Delete Account Modal */}
-      <Modal
-        isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
-        title="Delete Account?"
-        size="sm"
-      >
-        <div className="delete-modal-body">
-          <p className="text-secondary">
-            Are you sure you want to permanently delete your account (<strong>{user?.email}</strong>)?
-          </p>
-          <p className="text-danger text-sm mt-2">
-            All submitted job applications, profile records, and bookmarks will be completely removed.
-          </p>
-          <div className="modal-actions-footer mt-6">
-            <Button
-              variant="secondary"
-              onClick={() => setDeleteModalOpen(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              loading={deleting}
-              onClick={handleDeleteAccount}
-              id="confirm-delete-account-btn"
-            >
-              Confirm Delete
-            </Button>
+      {loading ? (
+        <Loader type="spinner" text="Loading your profile..." />
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(260px, 340px) 1fr',
+            gap: '24px',
+            alignItems: 'start',
+          }}
+          className="profile-saas-grid"
+        >
+          {/* Left Identity & Resume Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <section className="saas-card" style={{ textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '76px',
+                  height: '76px',
+                  borderRadius: '20px',
+                  background: 'var(--accent-gradient)',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.65rem',
+                  fontWeight: 800,
+                  margin: '0 auto 14px',
+                }}
+              >
+                {initials}
+              </div>
+              <h2 style={{ fontSize: '1.2rem', margin: '0 0 4px' }}>{formData.name || user?.name}</h2>
+              {formData.headline && (
+                <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', margin: '0 0 10px' }}>
+                  {formData.headline}
+                </p>
+              )}
+              <span className="badge badge-blue" style={{ textTransform: 'capitalize' }}>
+                {user?.role || 'candidate'}
+              </span>
+
+              <div
+                style={{
+                  marginTop: '18px',
+                  paddingTop: '16px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  textAlign: 'left',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Mail size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ wordBreak: 'break-all' }}>{user?.email}</span>
+                </div>
+                {formData.phone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Phone size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                    <span>{formData.phone}</span>
+                  </div>
+                )}
+                {formData.location && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <MapPin size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                    <span>{formData.location}</span>
+                  </div>
+                )}
+                {formData.education && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <GraduationCap size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                    <span>{formData.education}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* PDF Resume Card */}
+            <section className="saas-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <FileText size={18} style={{ color: 'var(--primary)' }} />
+                <h3 style={{ fontSize: '1.02rem', margin: 0 }}>Resume (PDF)</h3>
+              </div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+                Upload a verified PDF resume (max 5 MB) so recruiters can review your credentials immediately.
+              </p>
+
+              {resumeHref ? (
+                <div
+                  style={{
+                    padding: '12px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'var(--success-bg)',
+                    border: '1px solid var(--success-border)',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontWeight: 600, fontSize: '0.85rem' }}>
+                    <CheckCircle2 size={15} />
+                    <span>PDF Resume Attached</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                    <a
+                      href={resumeHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary btn-sm"
+                    >
+                      <ExternalLink size={13} />
+                      <span>Preview PDF</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleRemoveResume}
+                      disabled={uploadingResume}
+                      className="btn btn-danger btn-sm"
+                    >
+                      <Trash2 size={13} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '12px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px dashed var(--border-strong)',
+                    fontSize: '0.82rem',
+                    color: 'var(--text-muted)',
+                    marginBottom: '12px',
+                  }}
+                >
+                  No default resume uploaded yet.
+                </div>
+              )}
+
+              <label
+                className="btn btn-outline-primary btn-sm"
+                style={{ width: '100%', cursor: uploadingResume ? 'wait' : 'pointer' }}
+              >
+                <Upload size={15} />
+                <span>{uploadingResume ? 'Uploading PDF...' : resumeHref ? 'Replace PDF Resume' : 'Upload PDF Resume'}</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={handleResumeUpload}
+                  disabled={uploadingResume}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </section>
           </div>
+
+          {/* Right Form Column */}
+          <section className="saas-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
+              <User size={20} style={{ color: 'var(--primary)' }} />
+              <h2 style={{ fontSize: '1.15rem', margin: 0 }}>Edit Profile Information</h2>
+            </div>
+
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-row-2">
+                <div>
+                  <label htmlFor="prof-name" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                    Full Name
+                  </label>
+                  <input
+                    id="prof-name"
+                    type="text"
+                    className="saas-input"
+                    value={formData.name}
+                    onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="prof-phone" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                    Phone Number
+                  </label>
+                  <input
+                    id="prof-phone"
+                    type="tel"
+                    className="saas-input"
+                    placeholder="+91 98765 43210"
+                    value={formData.phone}
+                    onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-2">
+                <div>
+                  <label htmlFor="prof-location" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                    City / Location
+                  </label>
+                  <input
+                    id="prof-location"
+                    type="text"
+                    className="saas-input"
+                    placeholder="e.g. Bengaluru, India"
+                    value={formData.location}
+                    onChange={(e) => setFormData((p) => ({ ...p, location: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="prof-education" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                    Education / Degree
+                  </label>
+                  <input
+                    id="prof-education"
+                    type="text"
+                    className="saas-input"
+                    placeholder="e.g. B.Tech Computer Science (2026)"
+                    value={formData.education}
+                    onChange={(e) => setFormData((p) => ({ ...p, education: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="prof-headline" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                  Professional Headline
+                </label>
+                <input
+                  id="prof-headline"
+                  type="text"
+                  className="saas-input"
+                  placeholder="e.g. Full-Stack Developer Intern | React, Node.js, MongoDB"
+                  value={formData.headline}
+                  onChange={(e) => setFormData((p) => ({ ...p, headline: e.target.value }))}
+                />
+              </div>
+
+              {user?.role === 'recruiter' && (
+                <div>
+                  <label htmlFor="prof-company" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                    <Building2 size={14} style={{ display: 'inline', marginRight: '5px' }} />
+                    Company / Organization Name
+                  </label>
+                  <input
+                    id="prof-company"
+                    type="text"
+                    className="saas-input"
+                    value={formData.companyName}
+                    onChange={(e) => setFormData((p) => ({ ...p, companyName: e.target.value }))}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="prof-skills" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                  Key Skills (comma-separated)
+                </label>
+                <input
+                  id="prof-skills"
+                  type="text"
+                  className="saas-input"
+                  placeholder="React, Node.js, Express, MongoDB, Tailwind"
+                  value={formData.skills}
+                  onChange={(e) => setFormData((p) => ({ ...p, skills: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="prof-bio" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px' }}>
+                  About / Summary Bio
+                </label>
+                <textarea
+                  id="prof-bio"
+                  rows={4}
+                  className="saas-textarea"
+                  placeholder="Highlight your projects, internships, or career goals..."
+                  value={formData.bio}
+                  onChange={(e) => setFormData((p) => ({ ...p, bio: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                <button type="submit" disabled={saving} className="btn btn-primary">
+                  <Save size={16} />
+                  <span>{saving ? 'Saving Profile...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </section>
         </div>
-      </Modal>
-    </div>
+      )}
+    </WorkspaceLayout>
   );
 };
 

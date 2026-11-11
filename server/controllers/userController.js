@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Application from '../models/Application.js';
 import Job from '../models/Job.js';
-import { sendSuccess, sendError } from '../utils/helpers.js';
+import { sendSuccess, sendError, escapeRegExp } from '../utils/helpers.js';
 
 // @desc    Get current user's profile
 // @route   GET /api/users/profile
@@ -22,7 +22,7 @@ export const getProfile = async (req, res, next) => {
   }
 };
 
-// @desc    Update current user's profile
+// @desc    Update current user's profile & settings
 // @route   PUT /api/users/profile
 // @access  Private
 export const updateProfile = async (req, res, next) => {
@@ -32,18 +32,52 @@ export const updateProfile = async (req, res, next) => {
       return sendError(res, 404, 'User profile not found');
     }
 
-    const { name, phone, bio, skills, resumeUrl, companyName, currentPassword, newPassword } = req.body;
+    const {
+      name,
+      phone,
+      bio,
+      skills,
+      resumeUrl,
+      companyName,
+      location,
+      education,
+      headline,
+      notificationPreferences,
+      currentPassword,
+      newPassword
+    } = req.body;
 
-    if (name) user.name = name.trim();
-    if (phone !== undefined) user.phone = phone.trim();
-    if (bio !== undefined) user.bio = bio.trim();
+    if (name && typeof name === 'string') user.name = name.trim();
+    if (phone !== undefined) user.phone = String(phone).trim();
+    if (bio !== undefined) user.bio = String(bio).trim();
     if (skills !== undefined) {
-      user.skills = Array.isArray(skills) ? skills : skills.split(',').map((s) => s.trim());
+      user.skills = Array.isArray(skills)
+        ? skills.map((s) => String(s).trim()).filter(Boolean)
+        : String(skills).split(',').map((s) => s.trim()).filter(Boolean);
     }
-    if (resumeUrl !== undefined) user.resumeUrl = resumeUrl.trim();
-    if (companyName !== undefined) user.companyName = companyName.trim();
+    if (resumeUrl !== undefined) user.resumeUrl = String(resumeUrl).trim();
+    if (companyName !== undefined) user.companyName = String(companyName).trim();
+    if (location !== undefined) user.location = String(location).trim();
+    if (education !== undefined) user.education = String(education).trim();
+    if (headline !== undefined) user.headline = String(headline).trim();
 
-    // Password change handling
+    if (notificationPreferences && typeof notificationPreferences === 'object') {
+      user.notificationPreferences = {
+        emailUpdates:
+          notificationPreferences.emailUpdates !== undefined
+            ? Boolean(notificationPreferences.emailUpdates)
+            : user.notificationPreferences?.emailUpdates ?? true,
+        applicationAlerts:
+          notificationPreferences.applicationAlerts !== undefined
+            ? Boolean(notificationPreferences.applicationAlerts)
+            : user.notificationPreferences?.applicationAlerts ?? true,
+        jobRecommendations:
+          notificationPreferences.jobRecommendations !== undefined
+            ? Boolean(notificationPreferences.jobRecommendations)
+            : user.notificationPreferences?.jobRecommendations ?? true
+      };
+    }
+
     if (newPassword) {
       if (!currentPassword) {
         return sendError(res, 400, 'Current password is required to set a new password');
@@ -71,6 +105,10 @@ export const updateProfile = async (req, res, next) => {
         skills: updatedUser.skills,
         resumeUrl: updatedUser.resumeUrl,
         companyName: updatedUser.companyName,
+        location: updatedUser.location,
+        education: updatedUser.education,
+        headline: updatedUser.headline,
+        notificationPreferences: updatedUser.notificationPreferences,
         updatedAt: updatedUser.updatedAt
       }
     });
@@ -79,7 +117,7 @@ export const updateProfile = async (req, res, next) => {
   }
 };
 
-// @desc    Delete current user's profile
+// @desc    Delete own profile
 // @route   DELETE /api/users/profile
 // @access  Private
 export const deleteProfile = async (req, res, next) => {
@@ -89,18 +127,17 @@ export const deleteProfile = async (req, res, next) => {
       return sendError(res, 404, 'User not found');
     }
 
-    // Clean up applications submitted by this user
     await Application.deleteMany({ applicant: user._id });
 
-    // Clean up jobs posted if recruiter
     if (user.role === 'recruiter') {
       const recruiterJobs = await Job.find({ postedBy: user._id }).select('_id');
       const jobIds = recruiterJobs.map((j) => j._id);
-      await Application.deleteMany({ job: { $in: jobIds } });
+      if (jobIds.length > 0) {
+        await Application.deleteMany({ job: { $in: jobIds } });
+      }
       await Job.deleteMany({ postedBy: user._id });
     }
 
-    // Delete user
     await User.findByIdAndDelete(user._id);
 
     return sendSuccess(res, 200, 'User profile and related records deleted successfully');
@@ -109,7 +146,7 @@ export const deleteProfile = async (req, res, next) => {
   }
 };
 
-// @desc    Get all users (Admin only)
+// @desc    Get all users (Admin)
 // @route   GET /api/users
 // @access  Private (Admin)
 export const getAllUsersAdmin = async (req, res, next) => {
@@ -117,11 +154,12 @@ export const getAllUsersAdmin = async (req, res, next) => {
     const { role, search, page = 1, limit = 20 } = req.query;
 
     const query = {};
-    if (role && role !== 'All') {
-      query.role = role.toLowerCase();
+    if (typeof role === 'string' && role !== 'All' && ['candidate', 'recruiter', 'admin'].includes(role)) {
+      query.role = role;
     }
-    if (search && search.trim()) {
-      const sRegex = new RegExp(search.trim(), 'i');
+
+    if (typeof search === 'string' && search.trim()) {
+      const sRegex = new RegExp(escapeRegExp(search.trim()), 'i');
       query.$or = [
         { name: sRegex },
         { email: sRegex },
@@ -153,7 +191,7 @@ export const getAllUsersAdmin = async (req, res, next) => {
   }
 };
 
-// @desc    Update user role (Admin only)
+// @desc    Update user role (Admin)
 // @route   PUT /api/users/:id/role
 // @access  Private (Admin)
 export const updateUserRoleAdmin = async (req, res, next) => {
@@ -174,7 +212,6 @@ export const updateUserRoleAdmin = async (req, res, next) => {
       return sendError(res, 404, 'User not found');
     }
 
-    // Safety: prevent demoting the sole administrator
     if (targetUser.role === 'admin' && role !== 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin' });
       if (adminCount <= 1) {
@@ -198,7 +235,7 @@ export const updateUserRoleAdmin = async (req, res, next) => {
   }
 };
 
-// @desc    Delete user account (Admin only)
+// @desc    Delete user by ID (Admin)
 // @route   DELETE /api/users/:id
 // @access  Private (Admin)
 export const deleteUserAdmin = async (req, res, next) => {
@@ -209,7 +246,6 @@ export const deleteUserAdmin = async (req, res, next) => {
       return sendError(res, 400, 'Invalid user ID');
     }
 
-    // Prevent admin from deleting themselves through the admin endpoint
     if (id === req.user._id.toString()) {
       return sendError(res, 400, 'Administrators cannot delete their own active account from the admin panel');
     }
@@ -219,7 +255,6 @@ export const deleteUserAdmin = async (req, res, next) => {
       return sendError(res, 404, 'User not found');
     }
 
-    // Prevent deleting the sole administrator
     if (targetUser.role === 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin' });
       if (adminCount <= 1) {
@@ -227,14 +262,14 @@ export const deleteUserAdmin = async (req, res, next) => {
       }
     }
 
-    // Clean up applications submitted by this user
     await Application.deleteMany({ applicant: targetUser._id });
 
-    // Clean up jobs and applications if recruiter
     if (targetUser.role === 'recruiter') {
       const recruiterJobs = await Job.find({ postedBy: targetUser._id }).select('_id');
       const jobIds = recruiterJobs.map((j) => j._id);
-      await Application.deleteMany({ job: { $in: jobIds } });
+      if (jobIds.length > 0) {
+        await Application.deleteMany({ job: { $in: jobIds } });
+      }
       await Job.deleteMany({ postedBy: targetUser._id });
     }
 

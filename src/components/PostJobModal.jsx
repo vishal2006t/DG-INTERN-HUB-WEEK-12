@@ -1,231 +1,434 @@
-import React, { useState } from 'react';
-import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { api } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { Briefcase, X, AlertCircle, PlusCircle } from 'lucide-react';
+import api from '../services/api';
+import { useAuth, useToast } from '../hooks/useContexts';
+const CATEGORIES = [
+  'Web Development',
+  'Full Stack Development',
+  'Python & AI',
+  'UI/UX Design',
+  'Data Science & Analytics',
+  'Cloud & DevOps',
+  'Cyber Security',
+];
 
-const PostJobModal = ({ isOpen, onClose, onJobCreated }) => {
-  const [formData, setFormData] = useState({
-    title: '',
-    company: '',
-    location: 'Remote (India)',
-    workType: 'Remote',
-    category: 'Web Development',
-    stipend: '₹20,000 / month',
-    duration: '3 Months',
-    openings: 2,
-    skills: 'React, Node.js, JavaScript, CSS',
-    description: '',
-    featured: false
-  });
+const INITIAL_STATE = {
+  title: '',
+  company: '',
+  category: 'Web Development',
+  workType: 'Remote',
+  type: 'internship',
+  experienceLevel: 'Fresher',
+  location: 'Remote',
+  duration: '3 Months',
+  stipend: '₹15,000 / month',
+  openings: 2,
+  deadline: '',
+  featured: false,
+  skills: '',
+  description: '',
+  responsibilities: '',
+  requirements: '',
+};
 
-  const [loading, setLoading] = useState(false);
+const PostJobModalContent = ({ onClose, onSuccess }) => {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [formData, setFormData] = useState(() => ({
+    ...INITIAL_STATE,
+    company: user?.companyName || '',
+  }));
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [submitting, onClose]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    if (error) setError('');
-  };
+  const parseLines = (text) =>
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.company || !formData.description) {
-      setError('Title, company, and description are required.');
+    setError('');
+
+    if (!formData.title.trim() || !formData.company.trim() || !formData.description.trim()) {
+      setError('Title, company name, and description are required.');
       return;
     }
 
-    setLoading(true);
-    setError('');
+    const parsedSkills = formData.skills
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parsedSkills.length === 0) {
+      setError('Please enter at least one required skill (e.g. React, Python).');
+      return;
+    }
 
+    const numericStipend = Number(String(formData.stipend).replace(/[^0-9]/g, '')) || 0;
+
+    setSubmitting(true);
     try {
-      const skillsArray = formData.skills
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-
       const payload = {
-        ...formData,
-        skills: skillsArray,
-        openings: parseInt(formData.openings, 10) || 1
+        title: formData.title.trim(),
+        company: formData.company.trim(),
+        category: formData.category,
+        workType: formData.workType,
+        type: formData.type,
+        experienceLevel: formData.experienceLevel,
+        location: formData.location.trim() || formData.workType,
+        duration: formData.duration.trim() || '3 Months',
+        stipend: formData.stipend.trim() || 'Paid Internship',
+        stipendAmount: numericStipend,
+        openings: Math.max(1, Number(formData.openings) || 1),
+        featured: Boolean(formData.featured),
+        skills: parsedSkills,
+        description: formData.description.trim(),
+        responsibilities: parseLines(formData.responsibilities),
+        requirements: parseLines(formData.requirements),
       };
+      if (formData.deadline) {
+        payload.deadline = formData.deadline;
+      }
 
-      const res = await api.jobs.create(payload);
-      setSuccess(true);
-      if (onJobCreated) onJobCreated(res.data);
-      setTimeout(() => {
-        setSuccess(false);
-        onClose();
-      }, 1200);
+      await api.jobs.create(payload);
+      toast.success('Internship posting published successfully!');
+      setFormData(INITIAL_STATE);
+      if (onSuccess) onSuccess();
+      else onClose();
     } catch (err) {
-      setError(err.message || 'Failed to publish job posting');
+      const msg = err.message || 'Failed to publish internship posting.';
+      setError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
     <div
       className="modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="post-job-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
     >
-      <div className="modal-container" style={{ maxWidth: '580px' }}>
-        <div className="modal-header">
-          <div>
-            <span className="modal-eyebrow">Recruiter Portal</span>
-            <h3 className="modal-title">Post New Internship Opportunity</h3>
+      <div className="modal-container" style={{ maxWidth: '660px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '18px 24px',
+            borderBottom: '1px solid var(--border-light)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Briefcase size={20} style={{ color: 'var(--primary)' }} />
+            <h2 id="post-job-title" style={{ margin: 0, fontSize: '1.2rem' }}>
+              Publish New Opportunity
+            </h2>
           </div>
-          <button type="button" className="modal-close-btn" onClick={onClose}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="btn-ghost"
+            aria-label="Close modal"
+            style={{ padding: '6px', borderRadius: '8px' }}
+          >
             <X size={20} />
           </button>
         </div>
 
-        {error && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {error && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                backgroundColor: 'var(--error-bg)',
+                color: 'var(--error)',
+                border: '1px solid var(--error-border)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.86rem',
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
 
-        {success && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: '#dcfce7', color: '#15803d', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            <CheckCircle2 size={16} />
-            <span>Internship posted successfully!</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="application-form" style={{ gap: '0.9rem' }}>
           <div className="form-row-2">
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-title">Job Title <span className="required-star">*</span></label>
+            <div>
+              <label htmlFor="post-title" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Job / Internship Title <span className="required-star">*</span>
+              </label>
               <input
-                id="post-job-title"
+                id="post-title"
                 type="text"
-                name="title"
-                className="form-input"
-                placeholder="e.g. Backend Node.js Intern"
+                className="saas-input"
+                placeholder="e.g. Frontend React Developer Intern"
                 value={formData.title}
-                onChange={handleChange}
+                onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
                 required
               />
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-company">Company Name <span className="required-star">*</span></label>
+
+            <div>
+              <label htmlFor="post-company" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Company Name <span className="required-star">*</span>
+              </label>
               <input
-                id="post-job-company"
+                id="post-company"
                 type="text"
-                name="company"
-                className="form-input"
+                className="saas-input"
                 placeholder="e.g. Nexora Cloud"
                 value={formData.company}
-                onChange={handleChange}
+                onChange={(e) => setFormData((p) => ({ ...p, company: e.target.value }))}
                 required
               />
             </div>
           </div>
 
-          <div className="form-row-3">
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-worktype">Work Mode</label>
-              <select id="post-job-worktype" name="workType" className="form-input" value={formData.workType} onChange={handleChange}>
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="post-category" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Category / Domain
+              </label>
+              <select
+                id="post-category"
+                className="saas-select"
+                value={formData.category}
+                onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="post-workType" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Work Mode
+              </label>
+              <select
+                id="post-workType"
+                className="saas-select"
+                value={formData.workType}
+                onChange={(e) => setFormData((p) => ({ ...p, workType: e.target.value }))}
+              >
                 <option value="Remote">Remote</option>
                 <option value="Hybrid">Hybrid</option>
                 <option value="On-site">On-site</option>
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-category">Category</label>
-              <select id="post-job-category" name="category" className="form-input" value={formData.category} onChange={handleChange}>
-                <option value="Web Development">Web Development</option>
-                <option value="Python & AI">Python & AI</option>
-                <option value="Full Stack Development">Full Stack</option>
-                <option value="UI/UX Design">UI/UX Design</option>
-                <option value="Data Science & Analytics">Data Science</option>
+          </div>
+
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="post-type" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Engagement Type
+              </label>
+              <select
+                id="post-type"
+                className="saas-select"
+                value={formData.type}
+                onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
+              >
+                <option value="internship">Internship</option>
+                <option value="full-time">Full-Time</option>
+                <option value="part-time">Part-Time</option>
+                <option value="contract">Contract</option>
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-openings">Openings</label>
+
+            <div>
+              <label htmlFor="post-experience" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Experience Level
+              </label>
+              <select
+                id="post-experience"
+                className="saas-select"
+                value={formData.experienceLevel}
+                onChange={(e) => setFormData((p) => ({ ...p, experienceLevel: e.target.value }))}
+              >
+                <option value="Fresher">Fresher</option>
+                <option value="0-1 Years">0-1 Years</option>
+                <option value="1-3 Years">1-3 Years</option>
+                <option value="3+ Years">3+ Years</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="post-location" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Location
+              </label>
               <input
-                id="post-job-openings"
-                type="number"
-                name="openings"
-                className="form-input"
-                min="1"
-                value={formData.openings}
-                onChange={handleChange}
+                id="post-location"
+                type="text"
+                className="saas-input"
+                placeholder="e.g. Bengaluru / Remote"
+                value={formData.location}
+                onChange={(e) => setFormData((p) => ({ ...p, location: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="post-stipend" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Stipend / Salary
+              </label>
+              <input
+                id="post-stipend"
+                type="text"
+                className="saas-input"
+                placeholder="e.g. ₹18,000 / month"
+                value={formData.stipend}
+                onChange={(e) => setFormData((p) => ({ ...p, stipend: e.target.value }))}
               />
             </div>
           </div>
 
           <div className="form-row-2">
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-stipend">Stipend</label>
+            <div>
+              <label htmlFor="post-duration" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Duration
+              </label>
               <input
-                id="post-job-stipend"
+                id="post-duration"
                 type="text"
-                name="stipend"
-                className="form-input"
-                placeholder="₹20,000 / month"
-                value={formData.stipend}
-                onChange={handleChange}
+                className="saas-input"
+                placeholder="e.g. 6 Months"
+                value={formData.duration}
+                onChange={(e) => setFormData((p) => ({ ...p, duration: e.target.value }))}
               />
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-job-duration">Duration</label>
-              <input
-                id="post-job-duration"
-                type="text"
-                name="duration"
-                className="form-input"
-                placeholder="3 Months"
-                value={formData.duration}
-                onChange={handleChange}
-              />
+
+            <div>
+              <label htmlFor="post-openings" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Openings & Deadline
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr', gap: '8px' }}>
+                <input
+                  id="post-openings"
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="saas-input"
+                  value={formData.openings}
+                  onChange={(e) => setFormData((p) => ({ ...p, openings: e.target.value }))}
+                />
+                <input
+                  type="date"
+                  className="saas-input"
+                  aria-label="Application deadline"
+                  value={formData.deadline}
+                  onChange={(e) => setFormData((p) => ({ ...p, deadline: e.target.value }))}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="post-job-skills">Skills (comma separated)</label>
+          <div>
+            <label htmlFor="post-skills" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+              Required Skills (comma-separated)
+            </label>
             <input
-              id="post-job-skills"
+              id="post-skills"
               type="text"
-              name="skills"
-              className="form-input"
-              placeholder="React, Node.js, MongoDB"
+              className="saas-input"
+              placeholder="React, TypeScript, REST APIs, Git"
               value={formData.skills}
-              onChange={handleChange}
+              onChange={(e) => setFormData((p) => ({ ...p, skills: e.target.value }))}
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="post-job-desc">Description <span className="required-star">*</span></label>
+          <div>
+            <label htmlFor="post-description" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+              Role Description <span className="required-star">*</span>
+            </label>
             <textarea
-              id="post-job-desc"
-              name="description"
-              className="form-textarea"
+              id="post-description"
               rows={3}
-              placeholder="Outline role responsibilities and qualifications..."
+              className="saas-textarea"
+              placeholder="Describe day-to-day engineering work, team structure, and goals..."
               value={formData.description}
-              onChange={handleChange}
+              onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
               required
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', minHeight: '44px', marginTop: '0.25rem' }} disabled={loading}>
-            {loading ? 'Publishing Opportunity...' : 'Publish Internship Opportunity'}
-          </button>
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="post-resp" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Responsibilities (one per line)
+              </label>
+              <textarea
+                id="post-resp"
+                rows={3}
+                className="saas-textarea"
+                placeholder="Build reusable React components&#10;Collaborate in sprint reviews"
+                value={formData.responsibilities}
+                onChange={(e) => setFormData((p) => ({ ...p, responsibilities: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="post-req" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Requirements (one per line)
+              </label>
+              <textarea
+                id="post-req"
+                rows={3}
+                className="saas-textarea"
+                placeholder="Strong JavaScript fundamentals&#10;Familiarity with Git workflows"
+                value={formData.requirements}
+                onChange={(e) => setFormData((p) => ({ ...p, requirements: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '0.86rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={formData.featured}
+              onChange={(e) => setFormData((p) => ({ ...p, featured: e.target.checked }))}
+            />
+            <span>Mark as Featured Internship Listing</span>
+          </label>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
+            <button type="button" onClick={onClose} disabled={submitting} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="btn btn-primary">
+              <PlusCircle size={16} />
+              <span>{submitting ? 'Publishing...' : 'Publish Listing'}</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
   );
+};
+
+const PostJobModal = ({ isOpen, onClose, onSuccess }) => {
+  if (!isOpen) return null;
+  return <PostJobModalContent onClose={onClose} onSuccess={onSuccess} />;
 };
 
 export default PostJobModal;

@@ -1,78 +1,66 @@
-# DG Interns Hub - Backend Architecture & API Service (Week 11)
+# DG Interns Hub — Backend Architecture & API Service (Week 12 Capstone)
 
-Welcome to the backend module of the **DG Interns Hub** application.
+The backend service is built with **Node.js (v20+)** and **Express.js (v5.x)**, persisting data directly to **MongoDB Atlas (`dg_interns_hub`)** via **Mongoose (v9.x)**.
 
-## 🏗️ Architecture Overview
-
-The backend is built with **Node.js (v20+)** and **Express.js (v5.x)**, persisting data directly to **MongoDB Atlas** using **Mongoose (v9.x)**.
-
-- **Primary Entry Point:** `server/server.js` (and `backend/server.js`)
-- **Port:** Configured via `PORT` in `.env` (defaults to `5000`)
-- **Base API URL:** `http://localhost:5000/api`
+- **Primary Entry Point:** `server/server.js` (proxied by `backend/server.js`)
+- **Default Local Port:** `5000` (`PORT=10000` configured for Render in `render.yaml`)
+- **Base API Path:** `/api`
 
 ## 📁 Directory Structure
 
 ```
 backend/
-└── server.js                      # Modular proxy entry point
+└── server.js                           # Proxy entrypoint loading server/server.js
 server/
 ├── config/
-│   └── database.js                # MongoDB Atlas connection with URI masking
+│   ├── database.js                     # MongoDB Atlas connection (timeouts tuned + masked URI logs)
+│   └── jwt.js                          # Strict JWT secret provider (fail-closed in production)
 ├── controllers/
-│   ├── authController.js          # Authentication (Register, Login, Me, Logout)
-│   ├── jobController.js           # Jobs CRUD, Search, Filter, Pagination, Sorting
-│   ├── applicationController.js   # Application lifecycle, PDF upload, CSV Export
-│   ├── notificationController.js  # In-app notifications
-│   ├── analyticsController.js     # Admin platform statistics
-│   └── userController.js          # User profiles and Admin user management
+│   ├── authController.js               # Register, Login, Me, Logout
+│   ├── jobController.js                # Jobs CRUD, Search, Multi-facets (/filters), Sorting, Pagination
+│   ├── applicationController.js        # Candidate apply, Withdraw, Resume upload, Recruiter pipeline, Admin apps, CSV Export
+│   ├── notificationController.js       # List, Mark Read, Mark All Read, Delete Notification
+│   ├── analyticsController.js          # Public live metrics (/public), Recruiter stats, Admin analytics
+│   ├── contactController.js            # Week 12 public inquiry submission & Admin triage
+│   └── userController.js               # Profile GET/PUT/DELETE, Admin users list, Role & Status governance
 ├── middleware/
-│   ├── authMiddleware.js          # JWT Bearer verification
-│   ├── roleMiddleware.js          # Candidate, Recruiter, Admin RBAC
-│   ├── uploadMiddleware.js        # Multer PDF validator (5MB limit)
-│   ├── validationMiddleware.js    # Payload validation
-│   └── errorMiddleware.js         # Centralized 404 & error handling
+│   ├── authMiddleware.js               # JWT Bearer verification + active-account (isActive) enforcement
+│   ├── roleMiddleware.js               # RBAC (candidate, recruiter, admin)
+│   ├── uploadMiddleware.js             # Multer PDF upload (5MB max) + %PDF- magic-byte validation
+│   ├── validationMiddleware.js         # Strict 24-hex ObjectId & body validation
+│   └── errorMiddleware.js              # Centralized 404 & error serialization
 ├── models/
-│   ├── User.js                    # User schema with bcrypt password hashing
-│   ├── Job.js                     # Job schema with text indexing
-│   ├── Application.js             # Application schema with uniqueness constraint
-│   └── Notification.js            # In-app notification schema
-├── routes/
-│   ├── authRoutes.js              # /api/auth/*
-│   ├── jobRoutes.js               # /api/jobs/*
-│   ├── applicationRoutes.js       # /api/applications/*
-│   ├── notificationRoutes.js      # /api/notifications/*
-│   ├── analyticsRoutes.js         # /api/analytics/*
-│   └── userRoutes.js              # /api/users/*
-├── utils/
-│   ├── helpers.js                 # Uniform sendSuccess & sendError responses
-│   ├── seeder.js                  # Initial database seeding
-│   ├── test-apis.js               # 42-test API & Security suite
-│   └── verify-persistence.js      # DB persistence & fault tolerance tests
-└── validators/
-    ├── authValidator.js
-    ├── jobValidator.js
-    └── applicationValidator.js
+│   ├── User.js                         # User schema (bcrypt 10 rounds, notificationPreferences, isActive)
+│   ├── Job.js                          # Job schema with text & compound filter/sort indexes
+│   ├── Application.js                  # Unique (job, applicant) constraint + recruiter notes
+│   ├── Notification.js                 # Indexed recipient notification alerts
+│   └── ContactMessage.js               # Persistent contact inquiries for Admin Control Center
+├── routes/                             # authRoutes, jobRoutes, applicationRoutes, notificationRoutes, analyticsRoutes, contactRoutes, userRoutes
+└── utils/
+    ├── helpers.js                      # Standardized sendSuccess / sendError + safe RegExp escaping
+    ├── seeder.js                       # Database seed utility
+    ├── test-apis.js                    # Legacy Week 11 API checks
+    └── test-week12-e2e.js              # Week 12 20-case E2E API, RBAC, IDOR & security suite
 ```
 
-## 🔒 Security Implementations
+## 🔒 Week 12 Security & Performance Highlights
 
-1. **Helmet HTTP Headers**: Enforces secure HTTP response headers.
-2. **CORS Controls**: Configured origin whitelist supporting credentials.
-3. **Rate Limiting**: Stricter rate limiting on `/api/auth` (50 req/15min) and general protection on `/api` (300 req/15min).
-4. **JWT Authentication**: Signed tokens verified via Bearer Authorization header.
-5. **Password Hashing**: `bcryptjs` with 10 salt rounds before database persistence.
-6. **NoSQL Injection Sanitization**: Safe query parsing and regex validation.
-7. **Role-Based Access Control**: Strict segregation between `candidate`, `recruiter`, and `admin` permissions.
+1. **Strict JWT Policy (`server/config/jwt.js`)**: Fails closed cleanly at startup/signing in `NODE_ENV=production` when `JWT_SECRET` is unset.
+2. **Global NoSQL & XSS Sanitizer (`server/server.js`)**: Strips `$`/`.` key operators and dangerous script tags from request bodies while preserving user password characters intact.
+3. **Strict Query Parameter Type & Enum Enforcement**: Blocks `$ne`/`$gt` operator injection on query strings (`type`, `role`, etc.) and escapes RegExp metacharacters against ReDoS.
+4. **PDF Magic-Byte Inspection**: Validates real `%PDF-` file signatures rather than relying only on filename extensions.
+5. **Cross-Tenant IDOR Prevention & CSV Formula Neutralization**: Restricts recruiter `jobId` filters and neutralizes leading `=`, `+`, `-`, `@` in CSV exports.
+6. **CORS Allowlist & Helmet + Rate Limiting**: Enforces origin allowlists (supporting `FRONTEND_URL` and `CORS_ORIGINS`), Helmet `nosniff`, and auth/global `express-rate-limit` headers.
 
-## 🚀 Running the Backend
+## 🚀 Running & Testing Backend
 
 ```bash
-# Start server
+# Start API server
 npm run server
 
-# Run API test suite
-npm test
+# Run Week 12 20-case E2E & security suite
+npm run test:e2e
 
-# Run DB persistence verification
-npm run test:persistence
+# Run legacy baseline API test suite
+npm test
 ```

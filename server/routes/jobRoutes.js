@@ -1,20 +1,24 @@
 import express from 'express';
 import {
   getJobs,
+  getJobFilters,
   getJobById,
   createJob,
   updateJob,
   deleteJob
 } from '../controllers/jobController.js';
-import { authenticateUser } from '../middleware/authMiddleware.js';
+import { authenticateUser, optionalAuth } from '../middleware/authMiddleware.js';
 import { authorizeRole } from '../middleware/roleMiddleware.js';
-import { validateBody, validateObjectId } from '../middleware/validationMiddleware.js';
+import { validateBody } from '../middleware/validationMiddleware.js';
 import { validateJob } from '../validators/jobValidator.js';
 
 const router = express.Router();
 
+// Dynamic filter facets (must come before /:id route)
+router.get('/filters', getJobFilters);
+
 router.route('/')
-  .get(getJobs)
+  .get(optionalAuth, getJobs)
   .post(
     authenticateUser,
     authorizeRole('recruiter', 'admin'),
@@ -23,18 +27,16 @@ router.route('/')
   );
 
 router.route('/:id')
-  .get(validateObjectId('id'), getJobById)
+  .get(getJobById)
   .put(
     authenticateUser,
     authorizeRole('recruiter', 'admin'),
-    validateObjectId('id'),
     validateBody((body) => validateJob(body, true)),
     updateJob
   )
   .delete(
     authenticateUser,
     authorizeRole('recruiter', 'admin'),
-    validateObjectId('id'),
     deleteJob
   );
 

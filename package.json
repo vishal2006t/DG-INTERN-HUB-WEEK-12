@@ -10,9 +10,10 @@
     "server:watch": "node --watch server/server.js",
     "backend": "node backend/server.js",
     "start": "node server/server.js",
-    "build": "vite build && node -e \"const fs = require('fs'); fs.copyFileSync('dist/index.html', 'dist/404.html'); fs.cpSync('dist', 'docs', { recursive: true }); fs.cpSync('dist/assets', 'assets', { recursive: true });\"",
+    "build": "vite build && node -e \"const fs = require('fs'); fs.copyFileSync('dist/index.html', 'dist/404.html');\"",
     "lint": "oxlint",
     "test": "node server/utils/test-apis.js",
+    "test:e2e": "node server/utils/test-week12-e2e.js",
     "test:persistence": "node server/utils/verify-persistence.js",
     "preview": "vite preview"
   },

@@ -1,6 +1,6 @@
-# DG Interns Hub - REST API Documentation (Week 11 Release)
+# DG Interns Hub - REST API Documentation (Week 12 Capstone Release)
 
-Welcome to the official REST API documentation for the **DG Interns Hub Backend Application** (Week 11 Production Release). This production-grade API powers user authentication, role-based workflows, internship listing exploration, search, filtering, pagination, sorting, persistent in-app notifications, platform analytics, CSV data export, and end-to-end application tracking.
+Welcome to the official REST API documentation for the **DG Interns Hub Backend Application** (Week 12 Capstone Release). This production-grade API powers JWT authentication, role-based workflows, internship search, live facet extraction, multi-criteria filtering, sorting, pagination, PDF resume verification, persistent in-app notifications, contact inquiries, platform analytics, and CSV recruitment exports.
 
 ---
 
@@ -865,19 +865,60 @@ Welcome to the official REST API documentation for the **DG Interns Hub Backend 
 
 ---
 
-## 7. System Health Check
+## 7. Contact & Support Inquiries Endpoints (Week 12)
 
-### 7.1 Health Check
+### 7.1 Submit Public Inquiry
+- **Endpoint**: `/api/contact`
+- **Method**: `POST`
+- **Purpose**: Saves an XSS-sanitized inquiry from the Contact page directly to MongoDB `contactmessages`.
+- **Authentication**: Public
+- **Body**: `{ "name": "Aarav Sharma", "email": "aarav@example.com", "subject": "...", "message": "..." }`
+- **Success Response (201 Created)**: `{ "success": true, "message": "...", "data": { "_id": "...", "status": "new" } }`
+
+### 7.2 List Inquiries (Admin)
+- **Endpoint**: `/api/contact`
+- **Method**: `GET`
+- **Authentication**: Required (`admin`)
+
+### 7.3 Update Inquiry Status (Admin)
+- **Endpoint**: `/api/contact/:id/status`
+- **Method**: `PATCH`
+- **Authentication**: Required (`admin`)
+- **Body**: `{ "status": "in_progress" }` (`new` | `in_progress` | `resolved`)
+
+---
+
+## 8. Additional Week 12 Endpoints
+
+| Method | Endpoint | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/jobs/filters` | Public | Dynamic live categories, locations, work modes, and experience levels from open listings |
+| `GET` | `/api/analytics/public` | Public | Real-time homepage counters (`activeInternships`, `registeredCandidates`, `partnerCompanies`, `applicationsProcessed`) |
+| `POST` | `/api/applications/upload-resume` | Candidate / Auth | Validates `%PDF-` magic bytes & 5MB size limit before storing PDF resume |
+| `GET` | `/api/applications/admin` | Admin | Platform-wide application moderation list |
+| `DELETE` | `/api/notifications/:id` | Owner / Auth | Deletes a specific notification belonging to authenticated user |
+
+---
+
+## 9. System Health Check
+
+### 9.1 Health Check
 - **Endpoint**: `/api/health`
 - **Method**: `GET`
-- **Purpose**: Quick diagnostics to verify backend server status.
+- **Purpose**: Diagnostics verifying backend Express runtime and live MongoDB Atlas connection (`database.status`, `database.name`, `database.host`).
 - **Authentication**: Public
 - **Success Response (200 OK)**:
   ```json
   {
     "success": true,
     "message": "DG Interns Hub Backend API is running smoothly",
-    "timestamp": "2026-10-24T10:30:00.000Z",
-    "environment": "development"
+    "timestamp": "2026-11-11T09:30:00.000Z",
+    "environment": "production",
+    "database": {
+      "status": "connected",
+      "connected": true,
+      "name": "dg_interns_hub",
+      "host": "cluster0-shard.mongodb.net"
+    }
   }
   ```

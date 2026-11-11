@@ -2,33 +2,34 @@ import mongoose from 'mongoose';
 import Application from '../models/Application.js';
 import Job from '../models/Job.js';
 import Notification from '../models/Notification.js';
-import { sendSuccess, sendError } from '../utils/helpers.js';
+import { sendSuccess, sendError, escapeRegExp, escapeCsvCell } from '../utils/helpers.js';
 
-// @desc    Submit a new internship / job application
+// @desc    Apply for a job
 // @route   POST /api/applications
-// @access  Private (Candidate, Admin)
+// @access  Private (Candidate)
 export const applyForJob = async (req, res, next) => {
   try {
+    if (req.user.role !== 'candidate') {
+      return sendError(res, 403, 'Only candidate accounts can submit job applications');
+    }
+
     const { jobId, fullName, email, phone, whyInterested, resumeFileName, resumeUrl } = req.body;
 
-    // Resolve job by ObjectId or slug
-    let job;
+    let job = null;
     if (mongoose.Types.ObjectId.isValid(jobId)) {
       job = await Job.findById(jobId);
     }
     if (!job) {
       job = await Job.findOne({ slug: jobId });
     }
-
     if (!job) {
-      return sendError(res, 404, 'Job not found');
+      return sendError(res, 404, 'The selected job listing does not exist');
     }
 
     if (job.status === 'closed') {
       return sendError(res, 400, 'This position is currently closed to new applications');
     }
 
-    // Check for duplicate application
     const existingApplication = await Application.findOne({
       job: job._id,
       applicant: req.user._id
@@ -38,23 +39,19 @@ export const applyForJob = async (req, res, next) => {
       return sendError(res, 409, 'You have already submitted an application for this position');
     }
 
-    // Create application
     const application = await Application.create({
       job: job._id,
       applicant: req.user._id,
       fullName: fullName || req.user.name,
-      email: (email || req.user.email).toLowerCase().trim(),
-      phone: phone || req.user.phone,
-      whyInterested,
-      resumeFileName: resumeFileName || 'resume.pdf',
-      resumeUrl: resumeUrl || '',
-      status: 'pending'
+      email: email || req.user.email,
+      phone: phone || req.user.phone || '',
+      whyInterested: whyInterested || '',
+      resumeFileName: resumeFileName || (req.user.resumeUrl ? 'Profile-Resume.pdf' : 'resume.pdf'),
+      resumeUrl: resumeUrl || req.user.resumeUrl || ''
     });
 
-    // Increment applicantsCount on job
     await Job.findByIdAndUpdate(job._id, { $inc: { applicantsCount: 1 } });
 
-    // Send in-app notification to the recruiter who posted the job
     if (job.postedBy && job.postedBy.toString() !== req.user._id.toString()) {
       try {
         await Notification.create({
@@ -66,14 +63,13 @@ export const applyForJob = async (req, res, next) => {
           link: '/dashboard'
         });
       } catch (notifErr) {
-        console.warn('[Notification] Failed to create applicant notification:', notifErr.message);
+        console.warn('Non-critical notification creation error:', notifErr.message);
       }
     }
 
-    // Populate job details in return
     const populatedApp = await Application.findById(application._id)
-      .populate('job', 'title company location stipend workType')
-      .populate('applicant', 'name email');
+      .populate('job', 'title company location workType stipend status slug')
+      .populate('applicant', 'name email role phone headline education');
 
     return sendSuccess(res, 201, 'Application submitted successfully', populatedApp);
   } catch (error) {
@@ -81,14 +77,15 @@ export const applyForJob = async (req, res, next) => {
   }
 };
 
-// @desc    Get applications for the currently logged in candidate
+// @desc    Get current user's submitted applications
 // @route   GET /api/applications/my
-// @access  Private (Candidate, Recruiter, Admin)
+// @access  Private (Authenticated User)
 export const getMyApplications = async (req, res, next) => {
   try {
     const applications = await Application.find({ applicant: req.user._id })
-      .populate('job', 'title company location workType stipend category slug status')
-      .sort({ createdAt: -1 });
+      .populate('job', 'title company location workType category duration stipend status deadline slug')
+      .sort({ createdAt: -1 })
+      .lean();
 
     return sendSuccess(res, 200, 'Applications retrieved successfully', applications);
   } catch (error) {
@@ -96,38 +93,86 @@ export const getMyApplications = async (req, res, next) => {
   }
 };
 
-// @desc    Get all applications submitted to jobs posted by recruiter (or all for admin)
-// @route   GET /api/applications/recruiter
-// @access  Private (Recruiter, Admin)
-export const getRecruiterApplications = async (req, res, next) => {
+// @desc    Get all platform applications (Admin Monitor)
+// @route   GET /api/applications/admin
+// @access  Private (Admin)
+export const getAllApplicationsAdmin = async (req, res, next) => {
   try {
-    const isRecruiter = req.user.role === 'recruiter';
-    const isAdmin = req.user.role === 'admin';
+    const { status, search, page = 1, limit = 50 } = req.query;
+    const filter = {};
 
-    if (!isRecruiter && !isAdmin) {
-      return sendError(res, 403, 'Access denied: recruiter or admin privilege required');
+    if (status && status !== 'all' && status !== 'All') {
+      filter.status = status.toLowerCase();
     }
 
-    // For recruiter: only jobs created by them. For admin: all jobs or recruiter filter.
-    const jobFilter = isRecruiter ? { postedBy: req.user._id } : {};
+    if (search && search.trim()) {
+      const sRegex = new RegExp(escapeRegExp(search.trim()), 'i');
+      filter.$or = [
+        { fullName: sRegex },
+        { email: sRegex },
+        { phone: sRegex }
+      ];
+    }
+
+    const safePage = Math.max(1, parseInt(page, 10) || 1);
+    const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (safePage - 1) * safeLimit;
+
+    const total = await Application.countDocuments(filter);
+    const applications = await Application.find(filter)
+      .populate('job', 'title company workType location stipend status slug')
+      .populate('applicant', 'name email phone skills bio headline education resumeUrl')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
+      .lean();
+
+    return sendSuccess(res, 200, 'Platform applications retrieved successfully', applications, {
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safeLimit))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all applications for jobs posted by the recruiter (or all for admin)
+// @route   GET /api/applications/recruiter
+// @access  Private (Recruiter / Admin)
+export const getRecruiterApplications = async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const jobFilter = isAdmin ? {} : { postedBy: req.user._id };
+
     const jobs = await Job.find(jobFilter)
-      .select('_id title company workType location openings stipend applicantsCount status createdAt')
-      .sort({ createdAt: -1 });
+      .select('_id title company workType location openings stipend applicantsCount status createdAt slug')
+      .sort({ createdAt: -1 })
+      .lean();
 
     const jobIds = jobs.map((j) => j._id);
+    const jobIdStrings = new Set(jobIds.map((id) => id.toString()));
 
-    // Build application filter
     const appFilter = { job: { $in: jobIds } };
     const { jobId, status, search } = req.query;
 
-    if (jobId && mongoose.Types.ObjectId.isValid(jobId)) {
+    if (jobId) {
+      if (!mongoose.Types.ObjectId.isValid(jobId)) {
+        return sendError(res, 400, 'Invalid jobId filter');
+      }
+      if (!isAdmin && !jobIdStrings.has(String(jobId))) {
+        return sendError(res, 403, 'Access denied: you can only view applications for your own job postings');
+      }
       appFilter.job = jobId;
     }
-    if (status && status !== 'All') {
+
+    if (status && status !== 'All' && status !== 'all') {
       appFilter.status = status.toLowerCase();
     }
+
     if (search && search.trim()) {
-      const sRegex = new RegExp(search.trim(), 'i');
+      const sRegex = new RegExp(escapeRegExp(search.trim()), 'i');
       appFilter.$or = [
         { fullName: sRegex },
         { email: sRegex },
@@ -136,15 +181,14 @@ export const getRecruiterApplications = async (req, res, next) => {
     }
 
     const applications = await Application.find(appFilter)
-      .populate('job', 'title company workType location stipend status')
-      .populate('applicant', 'name email phone skills bio')
-      .sort({ createdAt: -1 });
+      .populate('job', 'title company workType location stipend status slug')
+      .populate('applicant', 'name email phone skills bio headline education location resumeUrl')
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Compute aggregated metrics for recruiter dashboard
-    const allAppsForJobs = await Application.find({ job: { $in: jobIds } });
+    const allAppsForJobs = await Application.find({ job: { $in: jobIds } }).select('status').lean();
     const stats = {
-      totalJobs: jobs.length,
-      totalApplicants: allAppsForJobs.length,
+      total: allAppsForJobs.length,
       pending: allAppsForJobs.filter((a) => a.status === 'pending').length,
       shortlisted: allAppsForJobs.filter((a) => a.status === 'shortlisted' || a.status === 'reviewed').length,
       accepted: allAppsForJobs.filter((a) => a.status === 'accepted').length,
@@ -161,9 +205,9 @@ export const getRecruiterApplications = async (req, res, next) => {
   }
 };
 
-// @desc    Get single application by ID
+// @desc    Get single application details
 // @route   GET /api/applications/:id
-// @access  Private (Applicant, Job Recruiter, Admin)
+// @access  Private (Applicant, Job Poster, or Admin)
 export const getApplicationById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -173,15 +217,13 @@ export const getApplicationById = async (req, res, next) => {
     }
 
     const application = await Application.findById(id)
-      .populate('job', 'title company location postedBy workType stipend')
-      .populate('applicant', 'name email phone skills bio');
+      .populate('job', 'title company location workType duration stipend postedBy status slug')
+      .populate('applicant', 'name email phone skills bio headline education location resumeUrl');
 
     if (!application) {
       return sendError(res, 404, 'Application not found');
     }
 
-    // Access authorization:
-    // Candidate who submitted, or recruiter who posted the job, or admin
     const isApplicant = application.applicant._id.toString() === req.user._id.toString();
     const isJobPoster = application.job && application.job.postedBy && application.job.postedBy.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
@@ -196,9 +238,9 @@ export const getApplicationById = async (req, res, next) => {
   }
 };
 
-// @desc    Update application status
+// @desc    Update application status & review notes
 // @route   PUT /api/applications/:id/status
-// @access  Private (Recruiter, Admin)
+// @access  Private (Owner Recruiter or Admin)
 export const updateApplicationStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -213,7 +255,6 @@ export const updateApplicationStatus = async (req, res, next) => {
       return sendError(res, 404, 'Application not found');
     }
 
-    // Verify permission: only job poster or admin can update status
     const isJobPoster = application.job && application.job.postedBy && application.job.postedBy.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
 
@@ -222,12 +263,10 @@ export const updateApplicationStatus = async (req, res, next) => {
     }
 
     application.status = status;
-    if (notes !== undefined) application.notes = notes;
+    if (notes !== undefined) application.notes = String(notes).trim();
     application.reviewedBy = req.user._id;
-
     await application.save();
 
-    // Send in-app notification to the candidate informing them of status change
     try {
       const statusTitle = status.charAt(0).toUpperCase() + status.slice(1);
       await Notification.create({
@@ -239,7 +278,7 @@ export const updateApplicationStatus = async (req, res, next) => {
         link: '/applications'
       });
     } catch (notifErr) {
-      console.warn('[Notification] Failed to create candidate status update notification:', notifErr.message);
+      console.warn('Non-critical notification error:', notifErr.message);
     }
 
     return sendSuccess(res, 200, `Application status updated to ${status}`, application);
@@ -248,9 +287,9 @@ export const updateApplicationStatus = async (req, res, next) => {
   }
 };
 
-// @desc    Delete or withdraw an application
+// @desc    Delete / withdraw application
 // @route   DELETE /api/applications/:id
-// @access  Private (Applicant, Recruiter, Admin)
+// @access  Private (Applicant, Job Poster, or Admin)
 export const deleteApplication = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -264,7 +303,6 @@ export const deleteApplication = async (req, res, next) => {
       return sendError(res, 404, 'Application not found');
     }
 
-    // Authorization: applicant can withdraw, or job poster or admin
     const isApplicant = application.applicant.toString() === req.user._id.toString();
     const isJobPoster = application.job && application.job.postedBy && application.job.postedBy.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
@@ -275,9 +313,9 @@ export const deleteApplication = async (req, res, next) => {
 
     await Application.findByIdAndDelete(id);
 
-    // Decrement job applicants count safely
     if (application.job) {
-      await Job.findByIdAndUpdate(application.job._id, { $inc: { applicantsCount: -1 } });
+      const safeCount = Math.max(0, (application.job.applicantsCount || 0) - 1);
+      await Job.findByIdAndUpdate(application.job._id, { applicantsCount: safeCount });
     }
 
     return sendSuccess(res, 200, 'Application removed successfully');
@@ -298,24 +336,16 @@ export const exportApplicationsCSV = async (req, res, next) => {
       return sendError(res, 403, 'Access denied: CSV export is only available to recruiters and administrators');
     }
 
-    // Determine accessible jobs
     const jobFilter = isRecruiter ? { postedBy: req.user._id } : {};
-    const jobs = await Job.find(jobFilter).select('_id title company workType location stipend');
+    const jobs = await Job.find(jobFilter).select('_id').lean();
     const jobIds = jobs.map((j) => j._id);
 
     const applications = await Application.find({ job: { $in: jobIds } })
       .populate('job', 'title company workType location stipend')
       .populate('applicant', 'name email phone skills')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Helper to escape CSV values
-    const escapeCSV = (val) => {
-      if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
-    };
-
-    // CSV header row
     const headers = [
       'Application ID',
       'Candidate Name',
@@ -331,20 +361,20 @@ export const exportApplicationsCSV = async (req, res, next) => {
     ];
 
     const rows = applications.map((app) => [
-      escapeCSV(app._id),
-      escapeCSV(app.fullName || app.applicant?.name || 'N/A'),
-      escapeCSV(app.email || app.applicant?.email || 'N/A'),
-      escapeCSV(app.phone || app.applicant?.phone || 'N/A'),
-      escapeCSV(app.job?.title || 'N/A'),
-      escapeCSV(app.job?.company || 'N/A'),
-      escapeCSV(app.job?.workType || 'N/A'),
-      escapeCSV(app.job?.stipend || 'N/A'),
-      escapeCSV(app.status?.toUpperCase() || 'PENDING'),
-      escapeCSV(new Date(app.createdAt).toISOString().split('T')[0]),
-      escapeCSV(app.resumeFileName || 'resume.pdf')
+      escapeCsvCell(app._id),
+      escapeCsvCell(app.fullName || app.applicant?.name || 'N/A'),
+      escapeCsvCell(app.email || app.applicant?.email || 'N/A'),
+      escapeCsvCell(app.phone || app.applicant?.phone || 'N/A'),
+      escapeCsvCell(app.job?.title || 'N/A'),
+      escapeCsvCell(app.job?.company || 'N/A'),
+      escapeCsvCell(app.job?.workType || 'N/A'),
+      escapeCsvCell(app.job?.stipend || 'N/A'),
+      escapeCsvCell(app.status?.toUpperCase() || 'PENDING'),
+      escapeCsvCell(new Date(app.createdAt).toISOString().split('T')[0]),
+      escapeCsvCell(app.resumeFileName || 'resume.pdf')
     ]);
 
-    const csvContent = [headers.map(escapeCSV).join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const csvContent = [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.join(','))].join('\r\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="dg-interns-applications.csv"');

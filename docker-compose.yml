@@ -1,17 +1,14 @@
 services:
-  frontend:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: week7-job-landing
+    container_name: dg-interns-hub-week12-api
     ports:
-      - "5173:5173"
-    volumes:
-      - .:/app
-      - /app/node_modules
+      - "5000:5000"
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true
-    stdin_open: true
-    tty: true
+      - NODE_ENV=production
+      - PORT=5000
     restart: unless-stopped

@@ -3,34 +3,40 @@ import { Loader2 } from 'lucide-react';
 
 const Loader = ({
   type = 'spinner',
-  count = 3,
-  rows = 5,
   text = 'Loading...',
-  className = ''
+  rows = 5,
+  count = 6,
+  fullScreen = false,
 }) => {
-  if (type === 'skeleton-card') {
+  if (type === 'skeleton-cards') {
     return (
-      <div className={`skeleton-grid ${className}`}>
-        {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className="skeleton-job-card">
-            <div className="skeleton-header">
-              <div className="skeleton-avatar skeleton-pulse" />
-              <div className="skeleton-header-text">
-                <div className="skeleton-line skeleton-title-line skeleton-pulse" />
-                <div className="skeleton-line skeleton-sub-line skeleton-pulse" />
+      <div
+        className="job-cards-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: '20px',
+        }}
+        aria-busy="true"
+        aria-label="Loading listings"
+      >
+        {Array.from({ length: count }).map((_, idx) => (
+          <div key={idx} className="saas-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <div className="skeleton" style={{ width: '44px', height: '44px', borderRadius: '12px' }} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="skeleton" style={{ height: '16px', width: '72%' }} />
+                <div className="skeleton" style={{ height: '12px', width: '46%' }} />
               </div>
             </div>
-            <div className="skeleton-line skeleton-headline skeleton-pulse" />
-            <div className="skeleton-meta-row">
-              <div className="skeleton-badge skeleton-pulse" />
-              <div className="skeleton-badge skeleton-pulse" />
-              <div className="skeleton-badge skeleton-pulse" />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="skeleton" style={{ height: '22px', width: '80px', borderRadius: '999px' }} />
+              <div className="skeleton" style={{ height: '22px', width: '64px', borderRadius: '999px' }} />
             </div>
-            <div className="skeleton-line skeleton-body skeleton-pulse" />
-            <div className="skeleton-line skeleton-body-short skeleton-pulse" />
-            <div className="skeleton-footer">
-              <div className="skeleton-button skeleton-pulse" />
-              <div className="skeleton-button skeleton-pulse" />
+            <div className="skeleton" style={{ height: '42px', width: '100%' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+              <div className="skeleton" style={{ height: '18px', width: '90px' }} />
+              <div className="skeleton" style={{ height: '32px', width: '110px' }} />
             </div>
           </div>
         ))}
@@ -40,27 +46,52 @@ const Loader = ({
 
   if (type === 'skeleton-table') {
     return (
-      <div className={`skeleton-table-wrap ${className}`}>
-        <div className="skeleton-table-header skeleton-pulse" />
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="skeleton-table-row">
-            <div className="skeleton-table-cell skeleton-pulse" style={{ width: '30%' }} />
-            <div className="skeleton-table-cell skeleton-pulse" style={{ width: '20%' }} />
-            <div className="skeleton-table-cell skeleton-pulse" style={{ width: '15%' }} />
-            <div className="skeleton-table-cell skeleton-pulse" style={{ width: '15%' }} />
-            <div className="skeleton-table-cell skeleton-pulse" style={{ width: '10%' }} />
-          </div>
-        ))}
+      <div className="saas-card" aria-busy="true" aria-label="Loading data">
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '18px' }}>
+          <div className="skeleton" style={{ height: '22px', width: '180px' }} />
+          <div className="skeleton" style={{ height: '32px', width: '120px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {Array.from({ length: rows }).map((_, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1.2fr 1fr 1fr',
+                gap: '12px',
+                padding: '10px 0',
+                borderBottom: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div className="skeleton" style={{ height: '18px' }} />
+              <div className="skeleton" style={{ height: '18px' }} />
+              <div className="skeleton" style={{ height: '18px' }} />
+              <div className="skeleton" style={{ height: '18px' }} />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
-  // Default spinner
   return (
-    <div className={`loader-container ${className}`} role="status" aria-live="polite">
-      <Loader2 size={36} className="loader-spinner animate-spin" />
-      {text && <p className="loader-text">{text}</p>}
-      <span className="sr-only">Loading content, please wait</span>
+    <div
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '12px',
+        padding: fullScreen ? '4rem 1.5rem' : '2.5rem 1rem',
+        minHeight: fullScreen ? '60vh' : 'auto',
+        color: 'var(--text-secondary)',
+      }}
+    >
+      <Loader2 size={34} className="spin-icon" style={{ color: 'var(--primary)' }} />
+      {text && <p style={{ fontSize: '0.92rem', fontWeight: 500, color: 'var(--text-muted)', margin: 0 }}>{text}</p>}
     </div>
   );
 };

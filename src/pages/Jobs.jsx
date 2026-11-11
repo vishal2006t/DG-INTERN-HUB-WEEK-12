@@ -1,295 +1,461 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { jobsData, categoriesList } from '../data/jobs';
-import { api } from '../services/api';
-import JobCard from '../components/JobCard';
+import {
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
+import api from '../services/api';
 import SearchBar from '../components/SearchBar';
 import FilterBar from '../components/FilterBar';
-import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import JobCard from '../components/JobCard';
+import Loader from '../components/Loader';
+
+const DEFAULT_CATEGORIES = [
+  'All Categories',
+  'Web Development',
+  'Full Stack Development',
+  'Python & AI',
+  'UI/UX Design',
+  'Data Science & Analytics',
+];
+
+const WORK_TYPES = ['All Modes', 'Remote', 'Hybrid', 'On-site'];
+const JOB_TYPES = [
+  { value: 'all', label: 'All Job Types' },
+  { value: 'internship', label: 'Internship' },
+  { value: 'full-time', label: 'Full-Time' },
+  { value: 'part-time', label: 'Part-Time' },
+  { value: 'contract', label: 'Contract' },
+];
+const EXPERIENCE_LEVELS = ['All Experience', 'Fresher', '0-1 Years', '1-3 Years', '3+ Years'];
 
 const Jobs = ({ onApplyJob }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const categoryParam = searchParams.get('category');
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(
-    categoryParam && categoriesList.includes(categoryParam) ? categoryParam : 'All'
+  // Filter States hydrated from URL where present
+  const selectedCategory = searchParams.get('category') || 'All Categories';
+  const setSelectedCategory = useCallback(
+    (cat) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (!cat || cat === 'All Categories') {
+          next.delete('category');
+        } else {
+          next.set('category', cat);
+        }
+        return next;
+      });
+    },
+    [setSearchParams]
   );
-  const [selectedWorkType, setSelectedWorkType] = useState('All');
-  const [sortBy, setSortBy] = useState('featured');
 
-  // Backend Pagination state
-  const [page, setPage] = useState(1);
-  const [limit] = useState(9);
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') || '');
+  const [workType, setWorkType] = useState(searchParams.get('workType') || 'All Modes');
+  const [jobType, setJobType] = useState(searchParams.get('type') || 'all');
+  const [experience, setExperience] = useState(searchParams.get('experience') || 'All Experience');
+  const [locationFilter, setLocationFilter] = useState(searchParams.get('location') || 'all');
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || '-createdAt');
+  const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
+
+  // Facets & Data State
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [locations, setLocations] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [totalJobs, setTotalJobs] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalJobs, setTotalJobs] = useState(jobsData.length);
-  const [jobs, setJobs] = useState(jobsData);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  // Sync category param if url changes
+  // 350ms Debounce on Search input
   useEffect(() => {
-    if (categoryParam && categoriesList.includes(categoryParam)) {
-      setSelectedCategory(categoryParam);
-      setPage(1);
-    }
-  }, [categoryParam]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch((prev) => {
+        if (prev !== searchTerm.trim()) {
+          setPage(1);
+        }
+        return searchTerm.trim();
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  // Fetch jobs from backend API whenever filters, search, sort, or page change
+  // Load dynamic filter facets from backend
   useEffect(() => {
-    let isCancelled = false;
-
-    const fetchJobs = async () => {
-      setIsLoading(true);
+    let active = true;
+    const loadFacets = async () => {
       try {
-        const res = await api.jobs.getAll({
-          search: searchTerm,
-          category: selectedCategory,
-          workType: selectedWorkType,
-          sort: sortBy,
-          page,
-          limit
-        });
-
-        if (!isCancelled && res?.data) {
-          setJobs(res.data);
-          setTotalPages(res.totalPages || 1);
-          setTotalJobs(res.total || res.data.length);
+        if (api.jobs.getFilters) {
+          const res = await api.jobs.getFilters();
+          if (active && res?.data) {
+            if (Array.isArray(res.data.categories) && res.data.categories.length > 0) {
+              setCategories(['All Categories', ...res.data.categories]);
+            }
+            if (Array.isArray(res.data.locations)) {
+              setLocations(res.data.locations);
+            }
+          }
         }
-      } catch (err) {
-        console.warn('Could not fetch from backend, using local state:', err.message);
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
+      } catch {
+        // Silent fallback to defaults if facets endpoint unavailable
       }
     };
-
-    const timer = setTimeout(fetchJobs, 250); // Debounce search
+    loadFacets();
     return () => {
-      isCancelled = true;
-      clearTimeout(timer);
+      active = false;
     };
-  }, [searchTerm, selectedCategory, selectedWorkType, sortBy, page, limit]);
+  }, []);
 
-  // Compute category counts
-  const countsByCategory = useMemo(() => {
-    const counts = { All: totalJobs };
-    categoriesList.forEach((cat) => {
-      if (cat !== 'All') {
-        counts[cat] = jobs.filter((job) => job?.category === cat).length;
+  const fetchJobs = useCallback(() => {
+    setLoading(true);
+    setError('');
+    setRefreshTick((t) => t + 1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = {
+          page,
+          limit: 9,
+          sort: sortBy,
+        };
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (selectedCategory && selectedCategory !== 'All Categories') params.category = selectedCategory;
+        if (workType && workType !== 'All Modes') params.workType = workType;
+        if (jobType && jobType !== 'all') params.type = jobType;
+        if (experience && experience !== 'All Experience') params.experience = experience;
+        if (locationFilter && locationFilter !== 'all') params.location = locationFilter;
+
+        const res = await api.jobs.getAll(params);
+        if (cancelled) return;
+
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setJobs(list);
+        setTotalJobs(res?.total ?? list.length);
+        setTotalPages(Math.max(1, res?.totalPages || 1));
+        setError('');
+
+        setLocations((prev) => {
+          if (prev.length > 0 || list.length === 0) return prev;
+          const derived = Array.from(new Set(list.map((j) => j.location).filter(Boolean))).sort();
+          return derived.length > 0 ? derived : prev;
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || 'Unable to load internships from the server.');
+          setJobs([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    });
-    return counts;
-  }, [totalJobs, jobs]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, sortBy, debouncedSearch, selectedCategory, workType, jobType, experience, locationFilter, refreshTick]);
 
-  const handleSelectCategory = (category) => {
-    setSelectedCategory(category);
-    setPage(1);
-    if (category === 'All') {
-      searchParams.delete('category');
-      setSearchParams(searchParams);
-    } else {
-      setSearchParams({ category });
-    }
-  };
+  // Listen for live job posts from PostJobModal
+  useEffect(() => {
+    const onUpdated = () => fetchJobs();
+    window.addEventListener('dg:jobs-updated', onUpdated);
+    return () => window.removeEventListener('dg:jobs-updated', onUpdated);
+  }, [fetchJobs]);
 
-  const handleClearFilters = () => {
+  const handleClearAll = () => {
     setSearchTerm('');
-    setSelectedCategory('All');
-    setSelectedWorkType('All');
-    setSortBy('featured');
+    setDebouncedSearch('');
+    setWorkType('All Modes');
+    setJobType('all');
+    setExperience('All Experience');
+    setLocationFilter('all');
+    setSortBy('-createdAt');
     setPage(1);
     setSearchParams({});
   };
 
+  const activeChips = useMemo(() => {
+    const chips = [];
+    if (debouncedSearch) chips.push({ key: 'search', label: `Search: "${debouncedSearch}"`, clear: () => { setSearchTerm(''); setDebouncedSearch(''); } });
+    if (selectedCategory !== 'All Categories') chips.push({ key: 'category', label: `Domain: ${selectedCategory}`, clear: () => setSelectedCategory('All Categories') });
+    if (workType !== 'All Modes') chips.push({ key: 'workType', label: `Mode: ${workType}`, clear: () => setWorkType('All Modes') });
+    if (jobType !== 'all') chips.push({ key: 'type', label: `Type: ${jobType}`, clear: () => setJobType('all') });
+    if (experience !== 'All Experience') chips.push({ key: 'experience', label: `Exp: ${experience}`, clear: () => setExperience('All Experience') });
+    if (locationFilter !== 'all') chips.push({ key: 'location', label: `Location: ${locationFilter}`, clear: () => setLocationFilter('all') });
+    return chips;
+  }, [debouncedSearch, selectedCategory, setSelectedCategory, workType, jobType, experience, locationFilter]);
+
   return (
-    <div className="page-wrapper jobs-page">
-      {/* Page Header */}
-      <section className="jobs-header-section">
+    <div className="page-wrapper">
+      {/* Header Section */}
+      <section className="jobs-header-section" style={{ padding: '36px 0 28px', borderBottom: '1px solid var(--border-light)' }}>
         <div className="container">
           <div className="jobs-header-content">
-            <span className="section-eyebrow">Verified Listings</span>
-            <h1 className="jobs-page-title">Internship Opportunities</h1>
+            <span className="section-eyebrow">Verified Opportunities</span>
+            <h1 className="jobs-page-title">Explore Internships & Tech Roles</h1>
             <p className="jobs-page-subtitle">
-              Explore opportunities that match your skills and career goals. All internships include verified mentorship and stipends.
+              Search live opportunities filtered by domain, location, work mode, experience level, and stipend.
             </p>
-          </div>
-
-          {/* Search Bar */}
-          <div className="jobs-search-section">
-            <SearchBar 
-              searchTerm={searchTerm} 
-              onSearchChange={(val) => {
-                setSearchTerm(val);
-                setPage(1);
-              }} 
-              onClear={() => {
-                setSearchTerm('');
-                setPage(1);
-              }} 
-              placeholder="Search internships by role, technology (e.g. React, Python), or company..."
-            />
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="jobs-filter-section">
-            <FilterBar 
-              categories={categoriesList} 
-              selectedCategory={selectedCategory} 
-              onSelectCategory={handleSelectCategory}
-              countsByCategory={countsByCategory}
-            />
           </div>
         </div>
       </section>
 
-      {/* Main Listing Section */}
-      <section className="jobs-listing-section">
+      {/* Search & Filter Workspace */}
+      <section className="jobs-search-section" style={{ padding: '24px 0 8px' }}>
         <div className="container">
-          {/* Controls Bar */}
-          <div className="listing-controls-bar">
-            <div className="listing-results-count">
-              <span>Showing <strong>{jobs.length}</strong> of {totalJobs} opportunities</span>
-              {selectedCategory !== 'All' && (
-                <span className="active-filter-badge">
-                  Category: {selectedCategory}
-                </span>
-              )}
-              {searchTerm && (
-                <span className="active-filter-badge">
-                  Search: "{searchTerm}"
-                </span>
-              )}
+          <SearchBar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            onClear={() => {
+              setSearchTerm('');
+              setDebouncedSearch('');
+              setPage(1);
+            }}
+            placeholder="Search by job title, company, or skill (e.g. React, Python, Figma)..."
+          />
+
+          <div style={{ marginTop: '14px' }}>
+            <FilterBar
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onSelectCategory={(cat) => {
+                setSelectedCategory(cat);
+                setPage(1);
+              }}
+            />
+          </div>
+
+          {/* Multi-Facet Dropdown Filters */}
+          <div className="jobs-filters-panel">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <SlidersHorizontal size={16} style={{ color: 'var(--primary)' }} />
+              <strong style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                Refine Opportunities
+              </strong>
             </div>
 
-            <div className="listing-quick-filters">
-              {/* Work Type Filter */}
-              <div className="quick-filter-group">
-                <span className="filter-label">Mode:</span>
-                <div className="work-type-buttons">
-                  {['All', 'Remote', 'Hybrid'].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      className={`work-type-btn ${selectedWorkType === type ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedWorkType(type);
-                        setPage(1);
-                      }}
-                    >
-                      {type}
-                    </button>
+            <div className="jobs-filters-grid">
+              <div className="filter-select-group">
+                <label htmlFor="filter-workType" className="filter-select-label">Work Mode</label>
+                <select
+                  id="filter-workType"
+                  className="filter-select-input"
+                  value={workType}
+                  onChange={(e) => {
+                    setWorkType(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  {WORK_TYPES.map((m) => (
+                    <option key={m} value={m}>{m}</option>
                   ))}
-                </div>
+                </select>
               </div>
 
-              {/* Sort by */}
-              <div className="sort-dropdown-wrap">
+              <div className="filter-select-group">
+                <label htmlFor="filter-jobType" className="filter-select-label">Job Type</label>
                 <select
+                  id="filter-jobType"
+                  className="filter-select-input"
+                  value={jobType}
+                  onChange={(e) => {
+                    setJobType(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  {JOB_TYPES.map((jt) => (
+                    <option key={jt.value} value={jt.value}>{jt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-select-group">
+                <label htmlFor="filter-experience" className="filter-select-label">Experience</label>
+                <select
+                  id="filter-experience"
+                  className="filter-select-input"
+                  value={experience}
+                  onChange={(e) => {
+                    setExperience(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  {EXPERIENCE_LEVELS.map((exp) => (
+                    <option key={exp} value={exp}>{exp}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-select-group">
+                <label htmlFor="filter-location" className="filter-select-label">Location</label>
+                <select
+                  id="filter-location"
+                  className="filter-select-input"
+                  value={locationFilter}
+                  onChange={(e) => {
+                    setLocationFilter(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="all">All Locations</option>
+                  {locations.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-select-group">
+                <label htmlFor="filter-sort" className="filter-select-label">Sort By</label>
+                <select
+                  id="filter-sort"
+                  className="filter-select-input"
                   value={sortBy}
                   onChange={(e) => {
                     setSortBy(e.target.value);
                     setPage(1);
                   }}
-                  className="sort-select"
-                  aria-label="Sort internships"
                 >
-                  <option value="featured">Featured / Default</option>
-                  <option value="newest">Newest First</option>
-                  <option value="oldest">Oldest First</option>
-                  <option value="deadline">Upcoming Deadline</option>
-                  <option value="stipend-high">Highest Stipend</option>
+                  <option value="-createdAt">Newest First</option>
+                  <option value="-stipendAmount">Highest Stipend</option>
+                  <option value="-applicantsCount">Most Popular</option>
+                  <option value="deadline">Closing Soon</option>
                 </select>
               </div>
+            </div>
 
-              {(searchTerm || selectedCategory !== 'All' || selectedWorkType !== 'All') && (
+            {activeChips.length > 0 && (
+              <div className="active-filters-strip">
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Active Filters:
+                </span>
+                {activeChips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    className="active-filter-chip"
+                    onClick={() => {
+                      chip.clear();
+                      setPage(1);
+                    }}
+                  >
+                    <span>{chip.label}</span>
+                    <X size={13} />
+                  </button>
+                ))}
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm clear-filters-btn"
-                  onClick={handleClearFilters}
+                  onClick={handleClearAll}
+                  className="btn-ghost"
+                  style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--error)', padding: '4px 8px' }}
                 >
-                  <RefreshCw size={13} />
-                  <span>Reset Filters</span>
+                  Reset All
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Listings Results Grid */}
+      <section className="jobs-listing-section" style={{ padding: '20px 0 64px' }}>
+        <div className="container">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '8px' }}>
+            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+              {loading
+                ? 'Searching verified listings...'
+                : `Showing ${jobs.length} of ${totalJobs} matching ${totalJobs === 1 ? 'listing' : 'listings'}`}
+            </p>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              Page {page} of {totalPages}
+            </span>
           </div>
 
-          {/* Cards Grid or Empty State */}
-          {isLoading ? (
-            <div style={{ textAlign: 'center', padding: '3.5rem 0', color: '#64748b' }}>
-              <Loader2 size={32} className="spin-icon" style={{ animation: 'spin 1s linear infinite', marginBottom: '0.75rem' }} />
-              <p>Fetching opportunities from database...</p>
+          {loading ? (
+            <Loader type="skeleton-cards" count={6} />
+          ) : error ? (
+            <div className="error-state-box">
+              <span>{error}</span>
+              <button type="button" onClick={fetchJobs} className="btn btn-secondary btn-sm">
+                <RefreshCw size={14} /> Retry
+              </button>
             </div>
-          ) : jobs.length > 0 ? (
+          ) : jobs.length === 0 ? (
+            <div className="empty-state-box">
+              <div className="empty-state-icon">
+                <Briefcase size={24} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem' }}>No matching internships found</h3>
+              <p style={{ margin: 0, maxWidth: '420px', fontSize: '0.9rem' }}>
+                Try broadening your search terms, clearing location filters, or switching categories.
+              </p>
+              <button type="button" onClick={handleClearAll} className="btn btn-primary btn-sm" style={{ marginTop: '8px' }}>
+                Clear All Filters
+              </button>
+            </div>
+          ) : (
             <>
               <div className="job-cards-grid">
                 {jobs.map((job) => (
-                  <JobCard 
-                    key={job._id || job.id} 
-                    job={job} 
-                    onApply={onApplyJob} 
-                  />
+                  <JobCard key={job._id || job.id} job={job} onApply={onApplyJob} />
                 ))}
               </div>
 
-              {/* Pagination Controls */}
+              {/* Backend Pagination Controls */}
               {totalPages > 1 && (
-                <div 
-                  className="pagination-controls" 
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center', 
-                    gap: '0.75rem', 
-                    marginTop: '2.5rem',
-                    paddingTop: '1.5rem',
-                    borderTop: '1px solid #e2e8f0'
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                  >
-                    <ChevronLeft size={16} />
-                    <span>Previous</span>
-                  </button>
+                <div className="pagination-bar">
+                  <span style={{ fontSize: '0.86rem', color: 'var(--text-muted)' }}>
+                    Showing page <strong>{page}</strong> of <strong>{totalPages}</strong> ({totalJobs} total)
+                  </span>
 
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>
-                    Page {page} of {totalPages}
+                  <div className="pagination-controls">
+                    <button
+                      type="button"
+                      className="pagination-btn"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft size={16} />
+                      <span>Prev</span>
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, idx) => idx + 1)
+                      .filter((pNum) => pNum === 1 || pNum === totalPages || Math.abs(pNum - page) <= 1)
+                      .map((pNum, idx, arr) => (
+                        <React.Fragment key={pNum}>
+                          {idx > 0 && arr[idx - 1] !== pNum - 1 && (
+                            <span style={{ color: 'var(--text-muted)', padding: '0 4px' }}>...</span>
+                          )}
+                          <button
+                            type="button"
+                            className={`pagination-btn ${pNum === page ? 'active' : ''}`}
+                            onClick={() => setPage(pNum)}
+                          >
+                            {pNum}
+                          </button>
+                        </React.Fragment>
+                      ))}
+
+                    <button
+                      type="button"
+                      className="pagination-btn"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      aria-label="Next page"
+                    >
+                      <span>Next</span>
+                      <ChevronRight size={16} />
+                    </button>
                   </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                  >
-                    <span>Next</span>
-                    <ChevronRight size={16} />
-                  </button>
                 </div>
               )}
             </>
-          ) : (
-            <div className="empty-results-card">
-              <AlertCircle size={40} className="empty-icon text-muted" />
-              <h3 className="empty-title">No internships matched your criteria</h3>
-              <p className="empty-desc">
-                We couldn't find any opportunities matching "<strong>{searchTerm || selectedCategory}</strong>". Try clearing your filters or searching for broader keywords like "Web", "Python", or "Design".
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleClearFilters}
-              >
-                Reset All Filters
-              </button>
-            </div>
           )}
         </div>
       </section>

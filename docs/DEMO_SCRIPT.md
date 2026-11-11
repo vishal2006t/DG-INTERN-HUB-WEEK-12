@@ -1,100 +1,61 @@
-# DG Interns Hub – 5 to 10 Minute Live Demonstration Script (Week 9)
-## "React.js Advanced Job & Internship Portal"
+# DG Interns Hub (Week 12 Capstone) — Live Demonstration Script (7–10 Minutes)
 
-**Target Duration:** 7 – 8 Minutes  
-**Target Audience:** Technical Mentors, Evaluators, Recruiters  
-**Preparation Checklist:**
-- [ ] Backend running (`node server/server.js`) on `http://localhost:5000`
-- [ ] Frontend running (`npm run dev`) on `http://localhost:5173`
-- [ ] Browser window opened in standard 1920x1080 or 1366x768 resolution
-- [ ] Sample PDF resume ready on your desktop (`Candidate_Resume.pdf`)
+**Target Duration:** ~8–9 minutes  
+**Pre-Demo Checklist:** Ensure MongoDB Atlas IP access is active, `.env` has valid secrets, and both backend (`npm run server`) and frontend (`npm run dev` or Week 12 deployed URLs) are running cleanly.
 
 ---
 
-### [00:00 - 01:15] Introduction & Landing Page Overview
-- **Action:** Open `http://localhost:5173/` in your browser.
-- **Presenter Screen:** Show the Landing Page (Home).
-- **Spoken Script:**
-  > "Hello everyone. Welcome to the live demonstration of the DG Interns Hub Week 9 project — an advanced React.js Job and Internship Portal.
-  > 
-  > As you can see on the landing page, we have engineered an original, production-ready interface. At the top, we have our branding mark, navigation links, and theme toggle. In the hero section, candidates can immediately discover opportunities through our live search island or click on trending search keywords like React, Remote, or Docker.
-  > 
-  > Scrolling down, we have real-time platform statistics counters highlighting 500+ active roles, trending domain categories such as Web Development, Cloud & DevOps, and AI, followed by curated Featured Opportunities loaded directly from our MongoDB Atlas database via Express APIs."
+## Segment 1: Homepage & Live Metrics (0:00 – 0:45)
+1. Open the Landing Page (`/`).
+2. Point out the SaaS visual redesign, **Light / Dark theme toggle** in the navbar, and the **4 live KPI cards** (`Active Internships`, `Registered Candidates`, `Partner Companies`, `Applications Processed`) queried live via `GET /api/analytics/public`.
+3. Click through a quick featured category or hero CTA into `/jobs`.
 
----
+## Segment 2: Candidate Registration (0:45 – 1:30)
+1. Navigate to `/register`.
+2. Switch between **Candidate** and **Recruiter** role toggles; explain that `admin` role self-registration is strictly disabled on both frontend UI and backend `POST /api/auth/register`.
+3. Register a fresh candidate account (showing inline field validation + password strength check + instant JWT login).
 
-### [01:15 - 02:15] Dark Mode & Search/Filter Engine
-- **Action 1:** Click the Sun/Moon theme toggle button in the top navbar.
-- **Presenter Screen:** Show the seamless transition to Dark Mode with rich navy/slate backgrounds (`#0B0F19`, `#111827`) and glowing badges.
-- **Action 2:** Click **"Browse Jobs"** (`/jobs`).
-- **Spoken Script:**
-  > "One of our advanced requirements was persistent Dark Mode. Notice how clicking the theme toggle smoothly transforms every element, card border, input field, and badge to high-contrast dark tokens. This setting is automatically saved to LocalStorage, so if I refresh the page, the user's preference is remembered.
-  > 
-  > Now, let's explore the Jobs directory. Here, we've implemented multi-criteria filtering. In the search bar, I'll type 'React'. Notice that as I type, our debounced search automatically triggers without requiring a page reload or submitting a form.
-  > 
-  > We can also filter simultaneously by Location (for example, 'Remote'), Category, Job Type, or sort by highest stipend. Active filter chips appear above the grid and can be dismissed individually or cleared with one click using 'Clear All'."
+## Segment 3: Login & Session Flow (1:30 – 2:10)
+1. Sign out and navigate to `/login`.
+2. Demonstrate invalid credential handling (`401`) vs valid login (`candidate@example.com` or newly created account).
+3. Show destination memory / automatic role redirect to `/dashboard`.
 
----
+## Segment 4: Search & Multi-Facet Filters (2:10 – 3:10)
+1. Open `/jobs` (`Explore Internships`).
+2. Type `"Python"` into the search bar to show the **350ms debounced API search** updating live cards from MongoDB.
+3. Combine dropdown filters (**Work Mode: Remote**, **Job Type**, **Experience Level**, **Location**, **Sort By: Highest Stipend**) powered by `GET /api/jobs/filters` + compound database indexes.
+4. Bookmark a listing into **Saved Jobs**.
 
-### [02:15 - 03:45] Job Details, Bookmarking & Applying with PDF Upload
-- **Action 1:** Click on any job card title (e.g. *Full Stack Developer Intern*).
-- **Presenter Screen:** Display the detailed `/jobs/:id` page.
-- **Action 2:** Click the **"Save Job"** button. Show the toast notification appear in the bottom-right.
-- **Action 3:** Click **"Apply Now"** to open the Application Modal dialog.
-- **Action 4:** Drag and drop or browse to select a PDF resume. Fill out Name, Email, Phone, and Cover Letter.
-- **Action 5:** Click **"Submit Application"**. Show the success state.
-- **Spoken Script:**
-  > "Here on the `/jobs/:id` route, the application retrieves the exact job details from our Express backend. Candidates can review the stipend strip, duration, full responsibilities, required technical skills, and mentorship benefits.
-  > 
-  > I can bookmark this opportunity by clicking 'Save Job'. Watch the toast notification slide in at the bottom right — this is handled by our global ToastContext and saved into SavedJobsContext.
-  > 
-  > Now, let's apply for this position. Clicking 'Apply Now' launches our accessible modal dialog. If I try to upload a non-PDF file or omit required fields, clear validation errors appear immediately. Let's upload a valid PDF resume and write our cover statement. When I submit, our Multer backend endpoint validates the PDF format and size, stores the file securely, and links the application to this job in MongoDB. If I attempt to apply a second time, our compound index prevents duplicate submissions and displays an informative alert."
+## Segment 5: Candidate Functionality & CRUD (3:10 – 4:15)
+1. Open **Job Details** (`/jobs/:id`) and click **Apply For This Role**.
+2. Upload a real `.pdf` resume (highlight client + server **PDF magic-byte `%PDF-` validation** & 5MB size cap).
+3. Visit **Candidate Dashboard** (`/dashboard`), **My Applications** (`/applications`), **Profile & Resume** (`/profile`), **Notifications** (`/notifications`), and **Settings** (`/settings`) via the persistent SaaS workspace sidebar.
+4. Withdraw a test application or update profile skills to demonstrate live Candidate CRUD persistence.
 
----
+## Segment 6: Recruiter Functionality & Pipeline CRUD (4:15 – 5:30)
+1. Sign in as Recruiter (`recruiter@nexoracloud.com`).
+2. In **Recruiter Hiring Studio** (`/dashboard`), open **Post Internship** modal (`POST /api/jobs`), create a listing, edit it (`PUT /api/jobs/:id`), and verify it appears live.
+3. Switch to **Applicants Pipeline**, filter applicants, review the candidate profile/resume, add **Recruiter Notes**, transition status to **Shortlisted** (`PUT /api/applications/:id/status`), and export the CSV pipeline (**CSV formula-injection neutralized**).
 
-### [03:45 - 05:00] Authentication & Protected Route Redirection
-- **Action 1:** Log out or open `/login`.
-- **Action 2:** Show the Login form with demo autofill buttons.
-- **Action 3:** Click **"Recruiter Demo"** or enter candidate credentials and submit.
-- **Spoken Script:**
-  > "Next, let's look at authentication and security. Our portal supports role-based access for candidates, recruiters, and administrators.
-  > 
-  > If an unauthenticated user attempts to visit a protected route like `/dashboard`, our `ProtectedRoute` component intercepts the request, redirects them to `/login`, and preserves their intended location in router state.
-  > 
-  > On the login page, we've provided convenient 1-click demo credential pills for fast evaluator testing. Let's sign in. The backend issues a stateless JWT token containing user role claims. Our Axios client automatically captures this token and attaches it to all subsequent requests via HTTP interceptors."
+## Segment 7: Admin Functionality & Live Contact Inquiries (5:30 – 6:30)
+1. Submit an inquiry on `/contact` (backed by `POST /api/contact` + XSS sanitization).
+2. Sign in as Admin (`admin@dginternshub.com`).
+3. Explore **Admin Control Center**:
+   - **Overview:** Live role distribution (`Users by Role`), `Applications Pipeline`, `Recent Platform Activity`.
+   - **Users Tab:** Change roles / inspect user accounts (excluding passwords).
+   - **Jobs, Applications & Inquiries Tabs:** Moderate listings, review platform-wide applications (`GET /api/applications/admin`), and transition the support inquiry from `new` -> `in_progress` -> `resolved` (`PATCH /api/contact/:id/status`).
 
----
+## Segment 8: API & Database Demonstration (6:30 – 7:20)
+1. Briefly display `API-DOCUMENTATION.md` / Postman collection (`postman/DG-Interns-Hub-API.json`).
+2. Show `/api/health` returning live MongoDB Atlas host & connection state (`GET /api/analytics/public` vs authenticated endpoints).
 
-### [05:00 - 06:30] Candidate Dashboard & Real Statistics Calculation
-- **Action:** Navigate to `/dashboard`.
-- **Presenter Screen:** Showcase the Candidate Dashboard.
-- **Spoken Script:**
-  > "Upon login, the candidate is welcomed to their personalized Dashboard.
-  > 
-  > Notice the five metric cards across the top: Total Applications, Pending, Shortlisted, Selected, and Rejected. Crucially, these are not hardcoded numbers. They are computed dynamically by iterating through the candidate's real application records fetched from `/api/applications/my`.
-  > 
-  > Below the KPI cards, the Recent Applications table lists each submitted role, company name, submission timestamp, and current review status. On the right, candidates have immediate access to their profile overview and bookmarked roles."
+## Segment 9: Security & Role Access Proof (7:20 – 8:10)
+1. Summarize & demonstrate test results (`npm run test:e2e` — `20/20 PASSED`):
+   - Unauthenticated / forged JWT rejected with `401`.
+   - Wrong-role access & cross-recruiter IDOR blocked with `403`.
+   - NoSQL `$ne/$gt`, XSS `<script>`, ReDoS patterns, and non-PDF uploads blocked (`400`/`403`).
 
----
-
-### [06:30 - 07:30] My Applications, Profile & Skills Manager
-- **Action 1:** Navigate to `/applications`.
-- **Action 2:** Switch between status tabs (All, Pending, Shortlisted). Click **"Details"** to inspect the application modal with the submitted cover letter and resume link.
-- **Action 3:** Navigate to `/profile`. Add a new skill (e.g., *TypeScript*) and click **"Save Profile Changes"**.
-- **Spoken Script:**
-  > "On the dedicated Applications page, users can filter applications by status tabs or search within their submissions. Clicking 'Details' opens a modal showing the exact cover letter and verified resume link stored on the server. Candidates can also safely withdraw an application if needed.
-  > 
-  > In the Profile section, candidates can manage their professional bio, contact details, and technical skill tags. Let's add 'TypeScript' to our skill cluster and click 'Save Changes'. The updated profile is persisted via `PUT /api/users/profile` and immediately synchronizes across the application."
-
----
-
-### [07:30 - 08:30] Mobile Responsiveness & Conclusion
-- **Action 1:** Open DevTools and switch viewport to 390px (Mobile iPhone).
-- **Action 2:** Open the mobile slide-out drawer menu and navigate to Home.
-- **Action 3:** Conclude presentation.
-- **Spoken Script:**
-  > "Finally, let's examine responsiveness. Switching to a 390px mobile viewport, the interface gracefully adapts: the navigation collapses into a slide-out drawer, the search island stacks cleanly, and job cards format into an intuitive single-column feed.
-  > 
-  > To verify backend integrity, our automated test suite runs 37 test cases covering authentication, CRUD operations, role authorization, and duplicate prevention — all passing with 100% success.
-  > 
-  > In summary, this Week 9 project delivers an end-to-end, resilient, and beautifully designed full-stack React portal. Thank you for your time, and I am ready for any questions!"
+## Segment 10: Responsive Mobile Layout & Separate Week 12 Deployment (8:10 – 9:00)
+1. Toggle DevTools / mobile viewport to **375px** (`Mobile`) and **768px** (`Tablet`).
+2. Open the responsive navigation drawer cleanly and confirm zero horizontal scroll across Hero, Jobs Grid, Forms, and Workspaces.
+3. Conclude by showing the **isolated Week 12 deployment configurations** (`render.yaml`, `vercel.json`, `Dockerfile`, `.env.example`) ensuring zero impact on Week 11 production deployments.

@@ -1,5 +1,5 @@
 /**
- * Standard API response helper utilities
+ * Standard API Response Helper Utilities
  */
 
 export const sendSuccess = (res, statusCode = 200, message = 'Success', data = null, meta = null) => {
@@ -22,18 +22,59 @@ export const sendError = (res, statusCode = 500, message = 'Internal Server Erro
 };
 
 /**
- * Sanitizes input to prevent NoSQL query injection characters ($ and .)
+ * Escapes special RegExp characters to prevent ReDoS attacks on dynamic search queries.
  */
-export const sanitizeQuery = (obj) => {
-  if (typeof obj !== 'object' || obj === null) return obj;
+export const escapeRegExp = (str) => {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+/**
+ * Strips potentially dangerous HTML/script payloads to prevent stored/reflected XSS.
+ */
+export const sanitizeXSS = (value) => {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<\/?[a-z][^>]*>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .trim();
+};
+
+/**
+ * Recursively sanitizes input objects and arrays to prevent NoSQL operator injection ($ and .)
+ * and optionally strip XSS vectors on string values.
+ */
+export const sanitizeQuery = (input, { stripXss = false } = {}) => {
+  if (input === null || input === undefined) return input;
+  if (typeof input === 'string') {
+    return stripXss ? sanitizeXSS(input) : input;
+  }
+  if (typeof input !== 'object') return input;
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeQuery(item, { stripXss }));
+  }
+  if (input instanceof Date) return input;
+
   const clean = {};
-  for (const key of Object.keys(obj)) {
-    if (key.startsWith('$') || key.includes('.')) continue;
-    if (typeof obj[key] === 'object') {
-      clean[key] = sanitizeQuery(obj[key]);
-    } else {
-      clean[key] = obj[key];
+  for (const key of Object.keys(input)) {
+    if (key.startsWith('$') || key.includes('.') || key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
     }
+    clean[key] = sanitizeQuery(input[key], { stripXss });
   }
   return clean;
+};
+
+/**
+ * Neutralizes CSV spreadsheet formula injection (=, +, -, @, tab, CR) and quotes cells safely.
+ */
+export const escapeCsvCell = (value) => {
+  if (value === null || value === undefined) return '""';
+  let str = String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
 };

@@ -1,90 +1,62 @@
-# DG Interns Hub - Frontend SPA Architecture (Week 11)
+# DG Interns Hub — Frontend SPA Architecture (Week 12 Capstone)
 
-Welcome to the frontend application of **DG Interns Hub**.
+The frontend is a responsive SaaS-grade Single Page Application built with **React 19**, **Vite 8**, **React Router DOM 7 (HashRouter)**, and **Axios**.
 
-## 🏗️ Architecture Overview
-
-The frontend is a modern, responsive Single Page Application (SPA) built with **React 19**, **Vite 8**, and **React Router DOM 7**.
-
-- **Source Code:** `src/`
-- **HTML Entry:** `index.html`
-- **Vite Configuration:** `vite.config.js`
-- **Live Deployment:** [GitHub Pages](https://vishal2006t.github.io/DG-INTERN-HUB-WEEK-11/)
+- **Entry Points:** `index.html`, `src/main.jsx`, `src/App.jsx`
+- **Design System:** CSS variables in `src/index.css`, `src/App.css`, and unified SaaS tokens/workspace rules in `src/styles/saas-redesign.css` (Light + Dark mode via `[data-theme]`)
 
 ## 📁 Directory Structure
 
 ```
 src/
-├── assets/                # Logos, SVG icons, and hero illustrations
-├── components/            # Reusable UI & compound view components
-│   ├── AdminDashboardView.jsx       # Admin analytics & user management
-│   ├── ApplicationForm.jsx          # Validated PDF resume upload modal
-│   ├── AuthModal.jsx                # Login / Registration modal dialog
-│   ├── Button.jsx                   # Atomic button with variants & loading state
-│   ├── EditJobModal.jsx             # Recruiter job editor
-│   ├── ErrorMessage.jsx             # Accessible error banner with retry trigger
-│   ├── FilterBar.jsx                # Multi-criteria filter controls
-│   ├── Footer.jsx                   # Platform footer
-│   ├── InputField.jsx               # Form input with validation states
-│   ├── JobCard.jsx                  # Job card with bookmarking & badges
-│   ├── Loader.jsx                   # Spinner & skeleton card loaders
-│   ├── Modal.jsx                    # Accessible modal dialog
-│   ├── Navbar.jsx                   # Navigation bar with dark mode & mobile drawer
-│   ├── NotificationDropdown.jsx     # In-app notifications center
-│   ├── PostJobModal.jsx             # Recruiter job creation modal
-│   ├── RecruiterDashboardView.jsx   # Recruiter job & applicant management
-│   ├── SearchBar.jsx                # Debounced search input
-│   ├── ThemeToggle.jsx              # Light / Dark mode switcher
-│   └── Toast.jsx                    # Floating toast portal
-├── context/               # React Context Providers
-│   ├── AuthContext.jsx              # JWT auth state & user session
-│   ├── NotificationContext.jsx      # In-app notification polling & updates
-│   ├── SavedJobsContext.jsx         # Bookmarked jobs in localStorage
-│   ├── ThemeContext.jsx             # Theme state (dark / light)
-│   └── ToastContext.jsx             # Toast notification dispatcher
-├── data/
-│   └── jobs.js                      # Curated baseline jobs
+├── components/
+│   ├── WorkspaceLayout.jsx            # Persistent SaaS sidebar shell across Candidate/Recruiter/Admin views
+│   ├── AdminDashboardView.jsx         # Platform KPIs, Users, Jobs, Applications & Contact Inquiries moderation
+│   ├── RecruiterDashboardView.jsx     # Recruiter Hiring Studio, pipeline transitions, notes & CSV export
+│   ├── ApplicationForm.jsx            # Validated application & PDF resume upload modal
+│   ├── ConfirmDialog.jsx              # Accessible confirmation dialog replacing native alerts
+│   ├── PostJobModal.jsx / EditJobModal.jsx
+│   ├── JobCard.jsx                    # Memoized listing card with horizontal badges & bookmark toggle
+│   ├── Navbar.jsx / Footer.jsx        # Responsive navbar with mobile drawer, theme switcher & notifications
+│   ├── NotificationDropdown.jsx       # Real-time navbar bell center
+│   ├── Loader.jsx                     # Accessible skeleton & spinner loaders (aria-busy="true")
+│   └── Toast.jsx / Modal.jsx / InputField.jsx / SearchBar.jsx / FilterBar.jsx / ThemeToggle.jsx
+├── context/
+│   ├── contextObjects.js              # Decoupled React Context instances (zero circular / fast-refresh warnings)
+│   ├── AuthContext.jsx                # JWT auth session, login, register & profile sync
+│   ├── NotificationContext.jsx        # Notification polling & read/delete updates
+│   ├── SavedJobsContext.jsx           # Saved jobs bookmarks persistence
+│   ├── ThemeContext.jsx               # Light/Dark mode theme persistence (dg_theme)
+│   └── ToastContext.jsx               # Global toast queue
+├── hooks/
+│   └── useContexts.js                 # Typed context consumer hooks
 ├── pages/
-│   ├── Home.jsx                     # Landing page with hero & categories
-│   ├── Jobs.jsx                     # Job directory with search & pagination
-│   ├── JobDetailsPage.jsx           # Detailed job view & application trigger
-│   ├── Dashboard.jsx                # Role-aware dashboard dispatcher
-│   ├── Applications.jsx             # Candidate application tracking
-│   ├── Profile.jsx                  # Candidate profile & skills tags
-│   ├── Login.jsx                    # Login page with 1-click demo pills
-│   ├── Register.jsx                 # Registration with role toggle
-│   ├── Contact.jsx                  # Contact & support page
-│   └── NotFound.jsx                 # Custom 404 Not Found page
-├── routes/
-│   └── ProtectedRoute.jsx           # Authentication & role guard with redirect memory
-├── services/
-│   └── api.js                       # Centralized Axios client with JWT interceptors
-├── styles/
-│   └── week9-pages.css              # Page layout styles
-├── App.css                          # Complete design system & responsive rules
-├── index.css                        # CSS tokens, theme variables & typography
-└── main.jsx                         # Application entrypoint
+│   ├── Home.jsx                       # Hero, live public KPI stats, spotlight card, categories
+│   ├── Jobs.jsx                       # Debounced search, live facets/experience filters, pagination
+│   ├── JobDetailsPage.jsx             # Full role details, skills tags & apply workflow
+│   ├── Dashboard.jsx                  # Role-aware workspace dispatcher
+│   ├── Applications.jsx               # Candidate applications pipeline & status filters
+│   ├── SavedJobs.jsx                  # Week 12 bookmarked roles management page
+│   ├── Notifications.jsx              # Week 12 full notifications management view
+│   ├── Profile.jsx                    # Profile, education, headline, skills & PDF resume management
+│   ├── Settings.jsx                   # Week 12 notification preference & account settings
+│   ├── Login.jsx / Register.jsx / Contact.jsx / NotFound.jsx
+├── routes/ProtectedRoute.jsx
+└── services/api.js                    # Centralized Axios instance with Bearer JWT interceptor
 ```
 
-## 🚀 Key Features
+## ⚡ Week 12 Performance & Code Quality
 
-1. **Role-Based Views**: Tailored dashboards for Candidate, Recruiter, and Admin.
-2. **Persistent In-App Notifications**: Real-time status update notifications.
-3. **Debounced Search & Filtering**: 350ms debounced text queries across Title, Company, Skills, and Description.
-4. **Secure Resume Upload**: Client-side validation enforcing PDF format and 5MB size limit.
-5. **Theme Switcher**: Persistent dark/light theme synchronized with local storage.
-6. **Code Splitting**: Rollup manual chunks for `react-vendor` and `icons-vendor`.
-7. **Mobile Responsiveness**: Adaptive layouts optimized for 390px mobile, 768px tablet, and 1920px desktop.
+- **Code Splitting (`React.lazy` + `Suspense`)**: Every major route renders on demand as a separate Vite chunk alongside `react-vendor` and `icons-vendor`.
+- **Render Optimization (`React.memo`, `useMemo`, `useCallback`)**: Memoized `JobCard` items, derived dashboard filter slices, and stable callbacks.
+- **Debounced Search (`350ms`) & API Pagination**: Minimizes Atlas queries during live typing on `/jobs`.
+- **Zero-Warning Linting**: `npm run lint` (`oxlint`, 104 rules across 88 files) passes with `0 warnings, 0 errors`.
 
-## 🛠️ Build & Deployment
+## 🛠️ Commands
 
 ```bash
-# Start development server
-npm run dev
-
-# Production build (outputs to dist/ and mirrors to docs/ for GitHub Pages)
-npm run build
-
-# Preview production build locally
-npm run preview
+npm run dev      # Start Vite dev server (http://localhost:5173)
+npm run lint     # Run oxlint across src/
+npm run build    # Production bundle in dist/ (+ 404.html)
+npm run preview  # Preview dist/ locally
 ```

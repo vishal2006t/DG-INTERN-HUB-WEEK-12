@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-const SavedJobsContext = createContext(null);
+import React, { useState, useEffect } from 'react';
+import { SavedJobsContext } from './contextObjects';
 
 export const SavedJobsProvider = ({ children }) => {
   const [savedJobs, setSavedJobs] = useState(() => {
@@ -82,13 +81,3 @@ export const SavedJobsProvider = ({ children }) => {
     </SavedJobsContext.Provider>
   );
 };
-
-export const useSavedJobs = () => {
-  const context = useContext(SavedJobsContext);
-  if (!context) {
-    throw new Error('useSavedJobs must be used within a SavedJobsProvider');
-  }
-  return context;
-};
-
-export default SavedJobsContext;

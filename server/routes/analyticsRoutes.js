@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  getPublicStats,
   getAdminAnalytics,
   getRecruiterAnalytics
 } from '../controllers/analyticsController.js';
@@ -8,6 +9,10 @@ import { authorizeRole } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
+// Public live statistics for landing page
+router.get('/public', getPublicStats);
+
+// Protected analytics routes
 router.use(authenticateUser);
 
 router.get('/admin', authorizeRole('admin'), getAdminAnalytics);

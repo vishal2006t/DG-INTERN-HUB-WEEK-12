@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "dg-interns-hub-api-week8",
-    "name": "DG Interns Hub API - Week 11 Production Suite",
-    "description": "Comprehensive Postman collection for DG Interns Hub Week 11 Production Release covering Auth, Jobs, Applications, Notifications, Analytics, and Admin RBAC.",
+    "_postman_id": "dg-interns-hub-api-week12",
+    "name": "DG Interns Hub API - Week 12 Final Capstone Suite",
+    "description": "Comprehensive Postman collection for DG Interns Hub Week 12 Capstone Release covering Auth, Jobs, Live Facets, Applications, PDF Resume Upload, Notifications, Contact Inquiries, Analytics, and Admin/Recruiter RBAC.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1443,6 +1443,87 @@
                 "export",
                 "csv"
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Week 12 Capstone Additions",
+      "item": [
+        {
+          "name": "Get Live Public Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analytics/public",
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics", "public"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Search Filter Facets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/filters",
+              "host": ["{{baseUrl}}"],
+              "path": ["jobs", "filters"]
+            }
+          }
+        },
+        {
+          "name": "Submit Contact Inquiry",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Aarav Sharma\",\n  \"email\": \"aarav@example.com\",\n  \"subject\": \"Recruiter Verification\",\n  \"message\": \"Requesting recruiter account onboarding.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contact",
+              "host": ["{{baseUrl}}"],
+              "path": ["contact"]
+            }
+          }
+        },
+        {
+          "name": "Admin Get Contact Inquiries",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/contact",
+              "host": ["{{baseUrl}}"],
+              "path": ["contact"]
+            }
+          }
+        },
+        {
+          "name": "Admin Get All Applications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/applications/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "admin"]
+            }
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{candidateToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/{{notificationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications", "{{notificationId}}"]
             }
           }
         }

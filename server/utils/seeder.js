@@ -290,6 +290,12 @@ export const seedInitialData = async () => {
       await Job.insertMany(initialJobs);
       console.log(`[Seeder] Seeded ${initialJobs.length} verified jobs into database.`);
     }
+
+    // Backfill experienceLevel for legacy jobs missing this field
+    await Job.updateMany(
+      { $or: [{ experienceLevel: { $exists: false } }, { experienceLevel: null }, { experienceLevel: '' }] },
+      { $set: { experienceLevel: 'Fresher' } }
+    );
   } catch (error) {
     console.error('[Seeder] Error seeding database:', error.message);
   }

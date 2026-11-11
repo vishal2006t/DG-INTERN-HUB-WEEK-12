@@ -1,404 +1,362 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, Upload, FileText, AlertCircle, Building2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
-
-const ApplicationForm = ({ job, isOpen, onClose }) => {
+import { Link } from 'react-router-dom';
+import {
+  X,
+  Upload,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Send,
+  Lock,
+} from 'lucide-react';
+import api from '../services/api';
+import { useAuth, useToast } from '../hooks/useContexts';
+const ApplicationFormContent = ({ job, onClose }) => {
   const { user, isAuthenticated, openAuth } = useAuth();
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
+  const toast = useToast();
+
+  const [formData, setFormData] = useState(() => ({
+    fullName: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
     whyInterested: '',
-    resumeFile: null,
-    resumeFileName: ''
-  });
+  }));
+  const [resumeFile, setResumeFile] = useState(null);
+  const [useProfileResume, setUseProfileResume] = useState(() => Boolean(user?.resumeUrl));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [submittedApp, setSubmittedApp] = useState(null);
 
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-
-  // Close modal on Escape key
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [submitting, onClose]);
 
-  // Pre-fill user data when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setIsSubmitted(false);
-      setIsSubmitting(false);
-      setErrors({});
-      if (user) {
-        setFormData((prev) => ({
-          ...prev,
-          fullName: user.name || prev.fullName,
-          email: user.email || prev.email,
-          phone: user.phone || prev.phone
-        }));
-      }
-    }
-  }, [isOpen, job, user]);
-
-  if (!isOpen) return null;
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
+  const jobId = job._id || job.id;
+  const companyName = typeof job.company === 'string' ? job.company : job.company?.name || 'Company';
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, resume: 'File size must be under 5MB.' }));
-        return;
-      }
-      setFormData((prev) => ({
-        ...prev,
-        resumeFile: file,
-        resumeFileName: file.name
-      }));
-      setErrors((prev) => ({ ...prev, resume: '' }));
-    }
-  };
+    const file = e.target.files?.[0];
+    setError('');
+    if (!file) return;
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full Name is required.';
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Only PDF (.pdf) resume files are accepted.');
+      e.target.value = '';
+      return;
     }
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email address is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = 'Please provide a valid email address.';
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required.';
-    } else if (!/^[0-9+\-\s]{10,15}$/.test(formData.phone.trim())) {
-      newErrors.phone = 'Please provide a valid phone number (10-15 digits).';
-    }
-    if (!formData.resumeFileName) {
-      newErrors.resume = 'Please upload your resume (PDF or DOCX).';
-    }
-    if (!formData.whyInterested.trim()) {
-      newErrors.whyInterested = 'Please share why you are interested in this internship.';
-    } else if (formData.whyInterested.trim().length < 20) {
-      newErrors.whyInterested = 'Please write at least 20 characters explaining your interest.';
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Resume size must not exceed 5 MB.');
+      e.target.value = '';
+      return;
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setResumeFile(file);
+    setUseProfileResume(false);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    setError('');
 
-    if (!isAuthenticated) {
-      setErrors((prev) => ({
-        ...prev,
-        submit: 'Please sign in first before applying for an internship opportunity. Click Sign In above to login with 1 click.'
-      }));
+    if (!formData.fullName.trim() || !formData.email.trim()) {
+      setError('Full name and email address are required.');
+      return;
+    }
+    if (!formData.phone.trim() || formData.phone.trim().length < 7) {
+      setError('Please enter a valid contact phone number (at least 7 digits).');
+      return;
+    }
+    if (!formData.whyInterested.trim() || formData.whyInterested.trim().length < 20) {
+      setError('Please write at least 20 characters explaining why you are a good fit.');
       return;
     }
 
-    setIsSubmitting(true);
+    setSubmitting(true);
     try {
-      let uploadedResumeUrl = formData.resumeFileName || 'resume.pdf';
-      if (formData.resumeFile) {
-        try {
-          const uploadRes = await api.applications.uploadResume(formData.resumeFile);
-          const fileUrl = uploadRes?.data?.resumeUrl || uploadRes?.data?.fileUrl || uploadRes?.resumeUrl || uploadRes?.fileUrl;
-          if (fileUrl) {
-            uploadedResumeUrl = fileUrl;
-          }
-        } catch (uploadErr) {
-          console.warn('Resume file upload warning, proceeding with filename:', uploadErr.message);
+      let resumeUrl = useProfileResume && user?.resumeUrl ? user.resumeUrl : '';
+      let resumeFileName = useProfileResume && user?.resumeUrl ? 'Profile-Resume.pdf' : '';
+
+      if (resumeFile) {
+        const uploadRes = await api.applications.uploadResume(resumeFile);
+        resumeUrl = uploadRes?.data?.resumeUrl || uploadRes?.resumeUrl || '';
+        resumeFileName = uploadRes?.data?.fileName || resumeFile.name;
+        if (!resumeUrl) {
+          throw new Error('Resume upload failed to return a file URL.');
         }
       }
 
-      await api.applications.apply({
-        jobId: job._id || job.id,
-        fullName: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        whyInterested: formData.whyInterested,
-        resumeUrl: uploadedResumeUrl,
-        resumeFileName: formData.resumeFileName || 'resume.pdf'
-      });
-      setIsSubmitted(true);
+      const payload = {
+        jobId,
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        whyInterested: formData.whyInterested.trim(),
+        resumeUrl,
+        resumeFileName,
+      };
+
+      const res = await api.applications.apply(payload);
+      setSubmittedApp(res?.data || payload);
+      toast.success(`Application submitted to ${companyName}!`);
     } catch (err) {
-      setErrors((prev) => ({
-        ...prev,
-        submit: err.message || 'Unable to submit application at this time.'
-      }));
+      const msg = err.message || 'Could not submit application.';
+      setError(msg);
+      toast.error(msg);
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  const handleResetAndClose = () => {
-    setFormData({
-      fullName: '',
-      email: '',
-      phone: '',
-      whyInterested: '',
-      resumeFile: null,
-      resumeFileName: ''
-    });
-    setIsSubmitted(false);
-    onClose();
-  };
-
   return (
-    <div 
-      className="modal-overlay" 
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <div
+      className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="application-modal-title"
+      aria-labelledby="apply-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
     >
-      <div className="modal-container">
-        {/* Modal Header */}
-        <div className="modal-header">
+      <div className="modal-container" style={{ maxWidth: '580px' }}>
+        <div
+          className="modal-header"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '18px 24px',
+            borderBottom: '1px solid var(--border-light)',
+          }}
+        >
           <div>
-            <span className="modal-eyebrow">Internship Application</span>
-            <h3 id="application-modal-title" className="modal-title">
-              {job ? job.title : 'Apply for Opportunity'}
-            </h3>
-            {job && (
-              <div className="modal-company-info">
-                <Building2 size={14} className="modal-company-icon" />
-                <span>{job.company}</span>
-                <span className="dot-divider">•</span>
-                <span>{job.location}</span>
-                <span className="dot-divider">•</span>
-                <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>{job.stipend}</span>
-              </div>
-            )}
+            <span className="modal-eyebrow" style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--primary)' }}>
+              {companyName}
+            </span>
+            <h2 id="apply-modal-title" style={{ margin: '2px 0 0', fontSize: '1.2rem' }}>
+              Apply: {job.title}
+            </h2>
           </div>
-          <button 
-            type="button" 
-            className="modal-close-btn" 
+          <button
+            type="button"
             onClick={onClose}
+            disabled={submitting}
+            className="btn-ghost"
             aria-label="Close modal"
+            style={{ padding: '6px', borderRadius: '8px' }}
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="modal-body">
-          {isSubmitted ? (
-            <div className="submission-success-view">
-              <div className="success-icon-wrap">
-                <CheckCircle2 size={48} className="text-success" />
+        <div style={{ padding: '20px 24px' }}>
+          {!isAuthenticated ? (
+            <div className="empty-state-box" style={{ padding: '32px 20px' }}>
+              <div className="empty-state-icon">
+                <Lock size={24} />
               </div>
-              <h4 className="success-title">Application Submitted Successfully!</h4>
-              <p className="success-message">
-                Thank you for applying. We will get back to you soon.
+              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Sign in required to apply</h3>
+              <p style={{ margin: 0, fontSize: '0.88rem', maxWidth: '380px' }}>
+                Please log in or create a free Candidate account so you can submit your PDF resume and track status updates.
               </p>
-              <div className="success-details-card">
-                <div className="success-detail-row">
-                  <span className="detail-label">Internship:</span>
-                  <span className="detail-value">{job ? job.title : 'Selected Opportunity'}</span>
-                </div>
-                <div className="success-detail-row">
-                  <span className="detail-label">Company:</span>
-                  <span className="detail-value">{job ? job.company : 'Partner Company'}</span>
-                </div>
-                <div className="success-detail-row">
-                  <span className="detail-label">Status:</span>
-                  <span className="badge badge-green">Received</span>
-                </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openAuth('login');
+                  }}
+                  className="btn btn-primary btn-sm"
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openAuth('register');
+                  }}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Create Account
+                </button>
               </div>
-              <p className="success-notice">
-                Our student review team will evaluate your profile and contact you via email regarding the next steps.
+            </div>
+          ) : user?.role && user.role !== 'candidate' ? (
+            <div className="error-state-box">
+              <span>
+                Only <strong>Candidate</strong> accounts can submit internship applications. You are currently signed in as <strong>{user.role}</strong>.
+              </span>
+            </div>
+          ) : submittedApp ? (
+            <div className="submission-success-view" style={{ textAlign: 'center', padding: '16px 0' }}>
+              <div className="success-icon-wrap" style={{ margin: '0 auto 12px', color: 'var(--success)' }}>
+                <CheckCircle2 size={44} />
+              </div>
+              <h3 style={{ margin: '0 0 6px' }}>Application Submitted!</h3>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '18px' }}>
+                Your application for <strong>{job.title}</strong> at <strong>{companyName}</strong> is now in recruiter review.
               </p>
-              <button 
-                type="button" 
-                className="btn btn-primary btn-lg" 
-                style={{ width: '100%', marginTop: '1rem' }}
-                onClick={handleResetAndClose}
-              >
-                Done & Close
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <Link to="/applications" onClick={onClose} className="btn btn-primary btn-sm">
+                  Track Status
+                </Link>
+                <button type="button" onClick={onClose} className="btn btn-secondary btn-sm">
+                  Done
+                </button>
+              </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="application-form" noValidate>
-              {errors.submit && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.85rem 1rem', background: '#fee2e2', color: '#b91c1c', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.875rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <AlertCircle size={16} style={{ flexShrink: 0 }} />
-                    <span>{errors.submit}</span>
-                  </div>
-                  {!isAuthenticated && openAuth && (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      style={{ alignSelf: 'flex-start', marginTop: '0.25rem' }}
-                      onClick={() => {
-                        onClose();
-                        openAuth('login');
-                      }}
-                    >
-                      Sign In Now
-                    </button>
-                  )}
+            <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {error && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    backgroundColor: 'var(--error-bg)',
+                    color: 'var(--error)',
+                    border: '1px solid var(--error-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.86rem',
+                  }}
+                >
+                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <span>{error}</span>
                 </div>
               )}
-              {/* Full Name */}
-              <div className="form-group">
-                <label htmlFor="applicant-fullName" className="form-label">
-                  Full Name <span className="required-star">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="applicant-fullName"
-                  name="fullName"
-                  placeholder="e.g. Rahul Sharma"
-                  className={`form-input ${errors.fullName ? 'has-error' : ''}`}
-                  value={formData.fullName}
-                  onChange={handleChange}
-                />
-                {errors.fullName && (
-                  <span className="form-error-msg">
-                    <AlertCircle size={13} /> {errors.fullName}
-                  </span>
-                )}
-              </div>
 
-              {/* Email & Phone */}
               <div className="form-row-2">
-                <div className="form-group">
-                  <label htmlFor="applicant-email" className="form-label">
+                <div>
+                  <label htmlFor="app-name" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                    Full Name <span className="required-star">*</span>
+                  </label>
+                  <input
+                    id="app-name"
+                    type="text"
+                    className="saas-input"
+                    value={formData.fullName}
+                    onChange={(e) => setFormData((p) => ({ ...p, fullName: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="app-email" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
                     Email Address <span className="required-star">*</span>
                   </label>
                   <input
+                    id="app-email"
                     type="email"
-                    id="applicant-email"
-                    name="email"
-                    placeholder="name@college.edu"
-                    className={`form-input ${errors.email ? 'has-error' : ''}`}
+                    className="saas-input"
                     value={formData.email}
-                    onChange={handleChange}
+                    onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                    required
                   />
-                  {errors.email && (
-                    <span className="form-error-msg">
-                      <AlertCircle size={13} /> {errors.email}
-                    </span>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="applicant-phone" className="form-label">
-                    Phone Number <span className="required-star">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    id="applicant-phone"
-                    name="phone"
-                    placeholder="+91 9876543210"
-                    className={`form-input ${errors.phone ? 'has-error' : ''}`}
-                    value={formData.phone}
-                    onChange={handleChange}
-                  />
-                  {errors.phone && (
-                    <span className="form-error-msg">
-                      <AlertCircle size={13} /> {errors.phone}
-                    </span>
-                  )}
                 </div>
               </div>
 
-              {/* Resume Upload */}
-              <div className="form-group">
-                <label className="form-label">
-                  Resume Upload (PDF / DOCX) <span className="required-star">*</span>
+              <div>
+                <label htmlFor="app-phone" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                  Phone Number <span className="required-star">*</span>
                 </label>
-                <div className={`resume-upload-zone ${errors.resume ? 'has-error' : ''}`}>
-                  <input
-                    type="file"
-                    id="resume-file-input"
-                    className="file-hidden-input"
-                    accept=".pdf,.doc,.docx"
-                    onChange={handleFileChange}
-                  />
-                  <label htmlFor="resume-file-input" className="file-upload-label">
-                    {formData.resumeFileName ? (
-                      <div className="uploaded-file-display">
-                        <FileText size={24} className="text-primary" />
-                        <div className="uploaded-file-meta">
-                          <span className="file-name">{formData.resumeFileName}</span>
-                          <span className="file-change-text">Click to change file</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="upload-prompt">
-                        <Upload size={24} className="upload-icon text-muted" />
-                        <span className="upload-text">Choose file or drag & drop here</span>
-                        <span className="upload-hint">PDF or DOCX format (Max 5MB)</span>
-                      </div>
-                    )}
-                  </label>
-                </div>
-                {errors.resume && (
-                  <span className="form-error-msg">
-                    <AlertCircle size={13} /> {errors.resume}
-                  </span>
-                )}
+                <input
+                  id="app-phone"
+                  type="tel"
+                  className="saas-input"
+                  placeholder="+91 98765 43210"
+                  value={formData.phone}
+                  onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
+                  required
+                />
               </div>
 
-              {/* Why are you interested in this internship? */}
-              <div className="form-group">
-                <label htmlFor="applicant-whyInterested" className="form-label">
-                  Why are you interested in this internship? <span className="required-star">*</span>
+              <div>
+                <label htmlFor="app-why" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                  Cover Note — Why are you a strong fit? <span className="required-star">*</span>
                 </label>
                 <textarea
-                  id="applicant-whyInterested"
-                  name="whyInterested"
+                  id="app-why"
                   rows={4}
-                  placeholder="Tell us about your relevant projects, what excites you about this role, and what skills you hope to contribute or learn..."
-                  className={`form-textarea ${errors.whyInterested ? 'has-error' : ''}`}
+                  className="saas-textarea"
+                  placeholder="Mention relevant projects, tech stack experience, and availability (min 20 characters)..."
                   value={formData.whyInterested}
-                  onChange={handleChange}
+                  onChange={(e) => setFormData((p) => ({ ...p, whyInterested: e.target.value }))}
+                  required
                 />
-                {errors.whyInterested && (
-                  <span className="form-error-msg">
-                    <AlertCircle size={13} /> {errors.whyInterested}
-                  </span>
-                )}
               </div>
 
-              {/* Submit CTA */}
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={onClose}
-                  disabled={isSubmitting}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '6px' }}>
+                  Resume (PDF Only, Max 5 MB)
+                </label>
+
+                {user?.resumeUrl && !resumeFile && (
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      marginBottom: '8px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--primary-light)',
+                      border: '1px solid var(--primary-border)',
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={useProfileResume}
+                      onChange={(e) => setUseProfileResume(e.target.checked)}
+                    />
+                    <FileText size={15} style={{ color: 'var(--primary)' }} />
+                    <span>Use my existing Profile PDF Resume</span>
+                  </label>
+                )}
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    padding: '16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1.5px dashed var(--border-strong)',
+                    backgroundColor: 'var(--bg-surface)',
+                    cursor: 'pointer',
+                    fontSize: '0.86rem',
+                    color: 'var(--text-secondary)',
+                  }}
                 >
+                  <Upload size={18} style={{ color: 'var(--primary)' }} />
+                  <span>
+                    {resumeFile
+                      ? `${resumeFile.name} (${(resumeFile.size / 1024).toFixed(0)} KB)`
+                      : 'Click to upload a PDF resume'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileChange}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+                <button type="button" onClick={onClose} disabled={submitting} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={isSubmitting}
-                  id="submit-application-btn"
-                >
-                  {isSubmitting ? 'Submitting Application...' : 'Submit Application'}
+                <button type="submit" disabled={submitting} className="btn btn-primary">
+                  <Send size={15} />
+                  <span>{submitting ? 'Submitting...' : 'Submit Application'}</span>
                 </button>
               </div>
             </form>
@@ -407,6 +365,11 @@ const ApplicationForm = ({ job, isOpen, onClose }) => {
       </div>
     </div>
   );
+};
+
+const ApplicationForm = ({ isOpen, job, onClose }) => {
+  if (!isOpen || !job) return null;
+  return <ApplicationFormContent key={job._id || job.id} job={job} onClose={onClose} />;
 };
 
 export default ApplicationForm;

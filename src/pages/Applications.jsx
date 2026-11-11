@@ -1,411 +1,367 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  FileText, 
-  Building2, 
-  MapPin, 
-  Trash2, 
-  ExternalLink, 
-  Search, 
-  Eye,
-  FileCheck
+import {
+  FileText,
+  Search,
+  Calendar,
+  Trash2,
+  ExternalLink,
+  RefreshCw,
+  Building2,
+  MessageSquare,
 } from 'lucide-react';
-import { useToast } from '../context/ToastContext';
-import { api } from '../services/api';
+import WorkspaceLayout from '../components/WorkspaceLayout';
+import ConfirmDialog from '../components/ConfirmDialog';
 import Loader from '../components/Loader';
-import ErrorMessage from '../components/ErrorMessage';
-import Button from '../components/Button';
-import Modal from '../components/Modal';
+import { useAuth, useToast } from '../hooks/useContexts';
+import api, { API_BASE_URL } from '../services/api';
 
-const Applications = () => {
-  const { success, error: toastError } = useToast();
+const STATUS_TABS = ['all', 'pending', 'reviewed', 'shortlisted', 'accepted', 'rejected'];
+
+const Applications = ({ onOpenPostJob }) => {
+  const { user } = useAuth();
+  const toast = useToast();
+  const isAdmin = user?.role === 'admin';
 
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Filters & Search
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirmApp, setConfirmApp] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  // Modals
-  const [selectedApp, setSelectedApp] = useState(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [appToWithdraw, setAppToWithdraw] = useState(null);
-  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
+  const backendOrigin = useMemo(() => API_BASE_URL.replace(/\/api\/?$/, ''), []);
 
-  const fetchApplications = async () => {
+  const fetchApplications = useCallback(() => {
     setLoading(true);
-    setError(null);
-    try {
-      const res = await api.applications.getMy();
-      setApplications(res?.data || []);
-    } catch (err) {
-      setError(err.message || 'Unable to load applications.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchApplications();
+    setError('');
+    setRefreshTick((t) => t + 1);
   }, []);
 
-  const handleWithdrawConfirm = async () => {
-    if (!appToWithdraw) return;
-    setWithdrawing(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = isAdmin
+          ? await (api.applications.getAllAdmin ? api.applications.getAllAdmin() : api.applications.getRecruiter())
+          : await api.applications.getMy();
+        if (!cancelled) {
+          setApplications(Array.isArray(res?.data) ? res.data : []);
+          setError('');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to load applications.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, refreshTick]);
+
+  const filteredApplications = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return applications.filter((app) => {
+      const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
+      const matchesQuery =
+        !q ||
+        (app.job?.title || '').toLowerCase().includes(q) ||
+        (app.job?.company || '').toLowerCase().includes(q) ||
+        (app.fullName || '').toLowerCase().includes(q) ||
+        (app.email || '').toLowerCase().includes(q);
+      return matchesStatus && matchesQuery;
+    });
+  }, [applications, statusFilter, searchQuery]);
+
+  const handleConfirmWithdraw = async () => {
+    if (!confirmApp) return;
+    setDeleting(true);
     try {
-      await api.applications.delete(appToWithdraw._id);
-      success('Application withdrawn successfully');
-      setApplications((prev) => prev.filter((a) => a._id !== appToWithdraw._id));
-      setIsWithdrawModalOpen(false);
-      setAppToWithdraw(null);
+      await api.applications.delete(confirmApp._id);
+      setApplications((prev) => prev.filter((item) => item._id !== confirmApp._id));
+      toast.success(isAdmin ? 'Application removed.' : 'Application withdrawn successfully.');
+      setConfirmApp(null);
     } catch (err) {
-      toastError(err.message || 'Failed to withdraw application');
+      toast.error(err.message || 'Unable to remove application.');
     } finally {
-      setWithdrawing(false);
+      setDeleting(false);
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status?.toLowerCase()) {
+  const handleAdminStatusChange = async (appId, newStatus) => {
+    try {
+      const res = await api.applications.updateStatus(appId, { status: newStatus });
+      const updated = res?.data;
+      setApplications((prev) =>
+        prev.map((a) => (a._id === appId ? { ...a, status: updated?.status || newStatus } : a))
+      );
+      toast.success(`Application status updated to ${newStatus}.`);
+    } catch (err) {
+      toast.error(err.message || 'Could not update application status.');
+    }
+  };
+
+  const getStatusClass = (status) => {
+    switch (status) {
       case 'accepted':
-      case 'selected':
-        return <span className="badge badge-green">Selected</span>;
+        return 'badge-green';
       case 'shortlisted':
-        return <span className="badge badge-blue">Shortlisted</span>;
+        return 'badge-blue';
       case 'reviewed':
-        return <span className="badge badge-blue">Under Review</span>;
+        return 'badge-amber';
       case 'rejected':
-        return <span className="badge badge-danger">Not Selected</span>;
+        return 'badge-red';
       default:
-        return <span className="badge badge-amber">Pending</span>;
+        return 'badge-gray';
     }
   };
 
-  // Filter & Search Logic
-  const filteredApps = applications.filter((app) => {
-    const matchesStatus = 
-      statusFilter === 'All' ? true : app.status?.toLowerCase() === statusFilter.toLowerCase();
-    
-    const title = app.job?.title?.toLowerCase() || '';
-    const company = app.job?.company?.toLowerCase() || '';
-    const query = searchQuery.toLowerCase().trim();
-    const matchesSearch = query === '' || title.includes(query) || company.includes(query);
-
-    return matchesStatus && matchesSearch;
-  });
+  const resolveResumeHref = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${backendOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
 
   return (
-    <div className="applications-page-container container">
-      {/* Header */}
-      <div className="page-header-row">
+    <WorkspaceLayout title={isAdmin ? 'Platform Applications' : 'My Applications'} onOpenPostJob={onOpenPostJob}>
+      <div className="saas-page-header">
         <div>
-          <span className="badge badge-blue mb-2">My Career Tracking</span>
-          <h1 className="page-title">Submitted Applications</h1>
-          <p className="page-subtitle">
-            Review your internship applications, interview progress, and recruiter updates.
+          <h1 className="saas-page-title">
+            {isAdmin ? 'Platform Applications Monitor' : 'My Applications'}
+          </h1>
+          <p className="saas-page-subtitle">
+            {isAdmin
+              ? 'Oversee candidate submissions and hiring statuses across all partner companies.'
+              : 'Monitor real-time status updates, recruiter feedback, and resume records.'}
           </p>
         </div>
-        <Link to="/jobs" className="btn btn-primary" id="apps-browse-more">
-          <span>Apply to More Jobs</span>
-        </Link>
+
+        <button
+          type="button"
+          onClick={fetchApplications}
+          disabled={loading}
+          className="btn btn-secondary btn-sm"
+        >
+          <RefreshCw size={14} className={loading ? 'spin-icon' : ''} />
+          <span>Refresh</span>
+        </button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="applications-filter-bar">
-        {/* Status Tabs */}
-        <div className="status-tabs-list" role="tablist">
-          {['All', 'pending', 'shortlisted', 'accepted', 'rejected'].map((st) => (
-            <button
-              key={st}
-              type="button"
-              className={`status-tab-btn ${statusFilter === st ? 'is-active' : ''}`}
-              onClick={() => setStatusFilter(st)}
-              role="tab"
-              aria-selected={statusFilter === st}
-            >
-              {st === 'All' ? 'All Applications' : st.charAt(0).toUpperCase() + st.slice(1)}
-              <span className="tab-count-badge">
-                {st === 'All' 
-                  ? applications.length 
-                  : applications.filter((a) => a.status === st).length}
-              </span>
-            </button>
-          ))}
+      {/* Filter Tabs + Search Bar */}
+      <div className="saas-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+        <div className="saas-tabs-bar" style={{ marginBottom: '14px' }}>
+          {STATUS_TABS.map((status) => {
+            const count =
+              status === 'all'
+                ? applications.length
+                : applications.filter((a) => a.status === status).length;
+            return (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setStatusFilter(status)}
+                className={`saas-tab-pill ${statusFilter === status ? 'active' : ''}`}
+                style={{ textTransform: 'capitalize' }}
+              >
+                <span>{status}</span>
+                <span className="badge badge-gray">{count}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Search inside applications */}
-        <div className="app-search-wrap">
-          <Search size={16} className="app-search-icon text-muted" />
+        <div style={{ position: 'relative', maxWidth: '420px' }}>
+          <Search
+            size={16}
+            style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-muted)',
+            }}
+          />
           <input
             type="text"
+            className="saas-input"
+            style={{ paddingLeft: '36px' }}
+            placeholder={
+              isAdmin
+                ? 'Search by job title, company, or candidate name...'
+                : 'Filter by internship title or company...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by job title or company..."
-            className="app-search-input"
-            aria-label="Search my applications"
           />
         </div>
       </div>
 
-      {/* Main Content Area */}
       {loading ? (
         <Loader type="skeleton-table" rows={5} />
       ) : error ? (
-        <ErrorMessage
-          title="Failed to Load Applications"
-          message={error}
-          onRetry={fetchApplications}
-        />
-      ) : filteredApps.length === 0 ? (
-        <div className="dashboard-empty-box py-12">
-          <div className="empty-bubble">
-            <FileText size={40} className="text-muted" />
+        <div className="error-state-box">
+          <span>{error}</span>
+          <button type="button" onClick={fetchApplications} className="btn btn-secondary btn-sm">
+            Retry
+          </button>
+        </div>
+      ) : filteredApplications.length === 0 ? (
+        <div className="empty-state-box">
+          <div className="empty-state-icon">
+            <FileText size={24} />
           </div>
-          <h3 className="empty-title">
-            {applications.length === 0 
-              ? 'No applications found' 
-              : 'No applications match your filter'}
-          </h3>
-          <p className="empty-desc">
-            {applications.length === 0 
-              ? 'Explore our curated list of tech internships and start applying today!'
-              : 'Try clearing your status filter or search query to view all applications.'}
+          <h3 style={{ margin: 0 }}>No applications match your filter</h3>
+          <p style={{ margin: 0, maxWidth: '420px', fontSize: '0.9rem' }}>
+            {applications.length === 0
+              ? 'No internship applications found yet.'
+              : 'Try resetting your status tab or search filter.'}
           </p>
-          {applications.length === 0 ? (
-            <Link to="/jobs" className="btn btn-primary mt-4">
-              Browse Open Positions
+          {applications.length === 0 && !isAdmin && (
+            <Link to="/jobs" className="btn btn-primary btn-sm" style={{ marginTop: '8px' }}>
+              Browse Open Internships
             </Link>
-          ) : (
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => { setStatusFilter('All'); setSearchQuery(''); }}
-            >
-              Reset Filters
-            </Button>
           )}
         </div>
       ) : (
-        <div className="applications-table-card">
-          <div className="table-responsive">
-            <table className="dashboard-data-table" aria-label="Candidate Applications List">
-              <thead>
-                <tr>
-                  <th scope="col">Position & Company</th>
-                  <th scope="col">Work Type & Stipend</th>
-                  <th scope="col">Applied Date</th>
-                  <th scope="col">Status</th>
-                  <th scope="col" className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredApps.map((app) => {
-                  const jobTitle = app.job?.title || 'Internship Position';
-                  const companyName = app.job?.company || 'Verified Partner';
-                  const appliedDate = new Date(app.createdAt).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  });
-                  const jobId = app.job?._id || app.job?.id || app.job?.slug;
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {filteredApplications.map((app) => {
+            const resumeHref = resolveResumeHref(app.resumeUrl);
+            return (
+              <article key={app._id} className="saas-card" style={{ padding: '18px 22px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: '14px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: '220px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.05rem' }}>
+                        {app.job?.title || 'Internship Role'}
+                      </h3>
+                      <span className={`badge ${getStatusClass(app.status)}`} style={{ textTransform: 'capitalize' }}>
+                        {app.status || 'pending'}
+                      </span>
+                    </div>
 
-                  return (
-                    <tr key={app._id} id={`application-item-${app._id}`}>
-                      <td>
-                        <div className="app-table-role-wrap">
-                          <Link to={`/jobs/${jobId}`} className="app-role-link">
-                            {jobTitle}
-                          </Link>
-                          <div className="app-company-line">
-                            <Building2 size={13} className="meta-pin-icon" />
-                            <span>{companyName}</span>
-                            <span className="dot-divider">•</span>
-                            <MapPin size={13} className="meta-pin-icon" />
-                            <span>{app.job?.location || 'Remote'}</span>
-                          </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '6px', fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <Building2 size={14} /> {app.job?.company || 'Partner Company'}
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <Calendar size={14} /> Applied{' '}
+                        {app.createdAt ? new Date(app.createdAt).toLocaleDateString() : 'Recently'}
+                      </span>
+                      {isAdmin && (
+                        <span>
+                          Candidate: <strong>{app.fullName || app.applicant?.name}</strong> ({app.email})
+                        </span>
+                      )}
+                    </div>
+
+                    {app.whyInterested && (
+                      <p style={{ margin: '10px 0 0', fontSize: '0.87rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {app.whyInterested}
+                      </p>
+                    )}
+
+                    {app.notes && (
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          padding: '10px 12px',
+                          borderRadius: 'var(--radius-sm)',
+                          backgroundColor: 'var(--info-bg)',
+                          border: '1px solid var(--info-border)',
+                          fontSize: '0.83rem',
+                          color: 'var(--text-primary)',
+                          display: 'flex',
+                          gap: '8px',
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <MessageSquare size={15} style={{ color: 'var(--info)', marginTop: '2px', flexShrink: 0 }} />
+                        <div>
+                          <strong>Recruiter Note: </strong>
+                          {app.notes}
                         </div>
-                      </td>
+                      </div>
+                    )}
+                  </div>
 
-                      <td>
-                        <div className="app-meta-stack">
-                          <span className="text-sm font-medium">{app.job?.stipend || 'Competitive'}</span>
-                          <span className="badge badge-gray text-xs">{app.job?.workType || 'Remote'}</span>
-                        </div>
-                      </td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {isAdmin && (
+                      <select
+                        className="saas-select"
+                        style={{ width: 'auto', padding: '6px 10px', fontSize: '0.82rem' }}
+                        value={app.status}
+                        aria-label="Update application status"
+                        onChange={(e) => handleAdminStatusChange(app._id, e.target.value)}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="reviewed">Reviewed</option>
+                        <option value="shortlisted">Shortlisted</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    )}
 
-                      <td>
-                        <span className="text-sm text-muted">{appliedDate}</span>
-                      </td>
+                    {resumeHref && (
+                      <a
+                        href={resumeHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary btn-sm"
+                      >
+                        <FileText size={14} />
+                        <span>Resume</span>
+                      </a>
+                    )}
 
-                      <td>{getStatusBadge(app.status)}</td>
+                    {app.job?._id && (
+                      <Link
+                        to={`/jobs/${app.job.slug || app.job._id}`}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        <span>Job</span>
+                        <ExternalLink size={13} />
+                      </Link>
+                    )}
 
-                      <td className="text-right">
-                        <div className="action-buttons-group">
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => {
-                              setSelectedApp(app);
-                              setIsDetailModalOpen(true);
-                            }}
-                            title="View your application details"
-                            id={`view-app-btn-${app._id}`}
-                          >
-                            <Eye size={14} />
-                            <span>Details</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            className="btn btn-outline-danger btn-sm"
-                            onClick={() => {
-                              setAppToWithdraw(app);
-                              setIsWithdrawModalOpen(true);
-                            }}
-                            title="Withdraw application"
-                            id={`withdraw-app-btn-${app._id}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmApp(app)}
+                      className="btn btn-danger btn-sm"
+                    >
+                      <Trash2 size={14} />
+                      <span>{isAdmin ? 'Delete' : 'Withdraw'}</span>
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 
-      {/* Application Details Modal */}
-      <Modal
-        isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
-        title="Application Submission Details"
-        subtitle={selectedApp?.job ? `${selectedApp.job.title} at ${selectedApp.job.company}` : ''}
-        size="lg"
-      >
-        {selectedApp && (
-          <div className="app-details-modal-content">
-            <div className="details-info-grid">
-              <div className="info-block">
-                <span className="info-label">Candidate Name</span>
-                <span className="info-value">{selectedApp.fullName}</span>
-              </div>
-              <div className="info-block">
-                <span className="info-label">Email Address</span>
-                <span className="info-value">{selectedApp.email}</span>
-              </div>
-              <div className="info-block">
-                <span className="info-label">Contact Phone</span>
-                <span className="info-value">{selectedApp.phone}</span>
-              </div>
-              <div className="info-block">
-                <span className="info-label">Submission Date</span>
-                <span className="info-value">
-                  {new Date(selectedApp.createdAt).toLocaleDateString('en-US', {
-                    dateStyle: 'long'
-                  })}
-                </span>
-              </div>
-            </div>
-
-            <div className="details-block mt-4">
-              <span className="info-label">Current Status</span>
-              <div className="mt-1">{getStatusBadge(selectedApp.status)}</div>
-            </div>
-
-            {selectedApp.notes && (
-              <div className="details-block alert-callout alert-info mt-4">
-                <span className="info-label">Recruiter Review Notes:</span>
-                <p className="text-sm mt-1">{selectedApp.notes}</p>
-              </div>
-            )}
-
-            <div className="details-block mt-4">
-              <span className="info-label">Cover Letter / Statement of Interest</span>
-              <div className="cover-letter-box">
-                {selectedApp.whyInterested}
-              </div>
-            </div>
-
-            <div className="details-block mt-4">
-              <span className="info-label">Attached Resume</span>
-              <div className="resume-attachment-card">
-                <FileCheck size={20} className="text-primary" />
-                <div className="resume-name-wrap">
-                  <span className="font-semibold text-sm">{selectedApp.resumeFileName || 'resume.pdf'}</span>
-                  <span className="text-xs text-muted">Verified Document</span>
-                </div>
-                {selectedApp.resumeUrl && (
-                  <a
-                    href={selectedApp.resumeUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <ExternalLink size={14} />
-                    <span>View File</span>
-                  </a>
-                )}
-              </div>
-            </div>
-
-            <div className="modal-actions-footer mt-6">
-              <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
-                Close
-              </Button>
-              {selectedApp.job && (
-                <Link to={`/jobs/${selectedApp.job._id || selectedApp.job.id || selectedApp.job.slug}`} className="btn btn-primary">
-                  View Job Details
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Withdraw Confirmation Modal */}
-      <Modal
-        isOpen={isWithdrawModalOpen}
-        onClose={() => setIsWithdrawModalOpen(false)}
-        title="Withdraw Application?"
-        size="sm"
-      >
-        <div className="withdraw-modal-body">
-          <p className="text-secondary">
-            Are you sure you want to withdraw your application for{' '}
-            <strong>{appToWithdraw?.job?.title}</strong> at{' '}
-            <strong>{appToWithdraw?.job?.company}</strong>?
-          </p>
-          <p className="text-muted text-sm mt-2">
-            This action will notify the hiring team and remove your application from their candidate pipeline.
-          </p>
-
-          <div className="modal-actions-footer mt-6">
-            <Button
-              variant="secondary"
-              onClick={() => setIsWithdrawModalOpen(false)}
-              disabled={withdrawing}
-            >
-              Keep Application
-            </Button>
-            <Button
-              variant="danger"
-              loading={withdrawing}
-              onClick={handleWithdrawConfirm}
-              id="confirm-withdraw-btn"
-            >
-              Withdraw Application
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
+      <ConfirmDialog
+        isOpen={Boolean(confirmApp)}
+        onClose={() => setConfirmApp(null)}
+        onConfirm={handleConfirmWithdraw}
+        loading={deleting}
+        title={isAdmin ? 'Delete Application Record' : 'Withdraw Application'}
+        message={`Are you sure you want to ${isAdmin ? 'remove' : 'withdraw'} the application for "${confirmApp?.job?.title || 'this internship'}"?`}
+        confirmText={isAdmin ? 'Delete Record' : 'Yes, Withdraw'}
+      />
+    </WorkspaceLayout>
   );
 };
 

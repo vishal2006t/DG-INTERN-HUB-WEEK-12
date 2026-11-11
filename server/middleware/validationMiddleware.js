@@ -14,8 +14,7 @@ export const validateBody = (validatorFn) => {
 export const validateObjectId = (paramName = 'id') => {
   return (req, res, next) => {
     const val = req.params[paramName];
-    // If it's a valid 24 hex char Mongo ID or a valid slug (for jobs)
-    if (mongoose.Types.ObjectId.isValid(val) || (typeof val === 'string' && val.length > 2)) {
+    if (typeof val === 'string' && /^[a-f\d]{24}$/i.test(val) && mongoose.Types.ObjectId.isValid(val)) {
       return next();
     }
     return sendError(res, 400, `Invalid ID format for parameter '${paramName}'`);

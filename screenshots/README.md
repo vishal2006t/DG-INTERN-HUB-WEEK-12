@@ -1,28 +1,21 @@
-# Screenshots Checklist - DG Interns Hub (Week 11 Production Release)
+# Screenshots & Responsive UI Verification — DG Interns Hub (Week 12 Capstone)
 
-This directory contains visual captures and UI verification records of the **DG Interns Hub** platform across Desktop, Tablet, and Mobile breakpoints.
+This directory contains verified **Google Chrome Headless CDP** screenshots captured directly from the live production `dist/` SPA connected to the local Express API + **MongoDB Atlas (`dg_interns_hub`)**. Zero mocked statistics were used.
 
-## 📸 Checklist & Verification Table
+## 📸 Screenshot Index
 
-| Filename | Description | Route / View | Key Features Highlighted | Status |
-|---|---|---|---|:---:|
-| `01_homepage_portal.png` | Homepage Portal Overview | `/` | Hero section, dynamic search bar, platform stats counters, category cards | Verified |
-| `02_homepage_dark.png` | Homepage (Dark Mode) | `/` | Persistent dark theme, glowing badges, high-contrast typography | Verified |
-| `03_jobs_directory_filters.png` | Jobs Directory & Search | `/jobs` | Search input, filter dropdowns (category, location, type, work mode, sort), job cards grid | Verified |
-| `04_debounced_search.png` | Real-time Search in Action | `/jobs?search=react` | Instant debounced filtering, active filter chips, matching results | Verified |
-| `05_job_details.png` | Detailed Job Page | `/jobs/:id` | Full description, responsibilities, skills tags, stipend highlight, Apply & Bookmark buttons | Verified |
-| `06_application_modal_validation.png` | Application Form Validation | Modal on `/jobs/:id` | Full name, email, phone, cover letter, PDF-only resume upload, error validation | Verified |
-| `07_login_page.png` | Professional Login Form | `/login` | Form controls, demo credentials quick-fill buttons, redirect state | Verified |
-| `08_registration_page.png` | Registration Form | `/register` | Candidate vs Recruiter role toggle tabs, company fields, validation | Verified |
-| `09_candidate_dashboard.png` | Candidate Dashboard | `/dashboard` | Welcome banner, real calculated stats cards (Total, Pending, Shortlisted, Selected, Rejected), recent applications table | Verified |
-| `10_my_applications_view.png` | Applications Tracking | `/applications` | Filter tabs by status (Pending, Shortlisted, Accepted), application details modal, withdraw action | Verified |
-| `11_profile_settings.png` | Candidate Profile & Skills | `/profile` | Account overview, bio, dynamic skill tags manager (add/delete skills), danger zone | Verified |
-| `12_responsive_mobile.png` | Mobile View (390px) | `/` & `/jobs` | Responsive mobile drawer menu, stacked hero layout, single-column job cards | Verified |
-| `13_api_tests_passed.png` | 42/42 Backend Tests Pass | Terminal | Output of `npm test` verifying all 42+ API and security tests passing | Verified |
-| `14_db_persistence_passed.png` | DB Persistence Tests Pass | Terminal | Output of `npm run test:persistence` verifying Atlas DB persistence | Verified |
+| File | Route / Context | Viewport & Theme | Key Verified Highlights |
+| :--- | :--- | :--- | :--- |
+| `01-home-light-1440.png` | Homepage (`/#/`) | `1440x900` Light | SaaS hero redesign, live DB counters (`16`, `7`, `38`, `13`), featured spotlight card |
+| `02-home-dark-1440.png` | Homepage (`/#/`) | `1440x900` Dark | Theme toggle persistence (`data-theme="dark"`), slate palette contrast |
+| `03-home-mobile-375.png` | Homepage + Drawer (`/#/`) | `375x812` Mobile | Responsive mobile drawer open cleanly, zero horizontal overflow |
+| `04-jobs-directory-1440.png` | Jobs Directory (`/#/jobs`) | `1440x900` Light | Debounced search, dynamic facet filters, aligned horizontal pill badges |
+| `05-job-details-1440.png` | Job Details (`/#/jobs/:id`) | `1440x900` Light | Breadcrumb navigation, stipend card, skill tags, Apply & Bookmark actions |
+| `06-candidate-dashboard-1440.png` | Candidate Workspace (`/#/dashboard`) | `1440x900` Light | Persistent SaaS sidebar, live KPI cards, readiness meter, recent applications |
+| `07-recruiter-dashboard-1440.png` | Recruiter Hiring Studio (`/#/dashboard`) | `1440x900` Light | Company internship table, live applicant counts, Export CSV, Post Internship CTA |
+| `08-admin-dashboard-1440.png` | Admin Control Center (`/#/dashboard`) | `1440x900` Light | Platform KPI cards, Overview / Users / Jobs / Applications / Inquiries tabs |
+| `09-contact-1440.png` | Contact & Support (`/#/contact`) | `1440x900` Light | Aligned hero header, channel cards, XSS-sanitized inquiry form backed by MongoDB |
+| `10-candidate-dashboard-dark-1440.png` | Candidate Workspace Dark (`/#/dashboard`) | `1440x900` Dark | Workspace sidebar + cards + recent applications in verified Dark Mode |
 
-## 🌟 Key Views & Workflow Demonstrations
-
-1. **Candidate Workflow**: Account registration -> Search & filter internships -> PDF Resume upload -> Application status tracking -> Notification updates.
-2. **Recruiter Workflow**: Job posting modal -> Applicant review table -> Application status updates (Shortlisted / Accepted / Rejected) -> CSV Export.
-3. **Admin Workflow**: Platform KPIs analytics -> Universal User management (role elevation & deletion) -> Global job moderation.
+## Verified Responsive Matrix
+All checked routes across `1920px`, `1440px`, `768px`, and `375px` recorded `scrollWidth <= innerWidth` (`overflow=false`), **0 console errors**, **0 page errors**, and **0 HTTP >= 500 responses**.

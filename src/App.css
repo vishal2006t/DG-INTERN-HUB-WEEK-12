@@ -10,7 +10,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.03);
 }
@@ -146,7 +146,7 @@
 
 .mobile-nav-drawer {
   display: none;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   padding: 1.25rem 1.5rem 1.75rem;
   box-shadow: var(--shadow-md);
@@ -179,7 +179,7 @@
    2. HERO SECTION
    -------------------------------------------------- */
 .hero-section {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   padding: 4.5rem 0 4rem;
 }
@@ -260,7 +260,7 @@
 }
 
 .hero-spotlight-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   padding: 1.75rem;
@@ -356,7 +356,7 @@
   position: absolute;
   bottom: -18px;
   right: -14px;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
   border-radius: var(--radius-md);
@@ -382,7 +382,7 @@
    3. STATS SECTION
    -------------------------------------------------- */
 .stats-section {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   padding: 2.25rem 0;
 }
@@ -488,7 +488,7 @@
 }
 
 .job-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 1.5rem;
@@ -664,7 +664,7 @@
    -------------------------------------------------- */
 .why-choose-section {
   padding: 5rem 0;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-top: 1px solid var(--border-light);
   border-bottom: 1px solid var(--border-light);
 }
@@ -689,7 +689,7 @@
   transform: translateY(-2px);
   border-color: var(--primary-border);
   box-shadow: var(--shadow-sm);
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
 }
 
 .feature-icon-wrapper {
@@ -733,7 +733,7 @@
 }
 
 .step-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 2rem;
@@ -846,7 +846,7 @@
    9. JOBS PAGE (/jobs)
    -------------------------------------------------- */
 .jobs-header-section {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   padding: 3.5rem 0 2rem;
 }
@@ -882,7 +882,7 @@
   display: flex;
   align-items: center;
   position: relative;
-  background-color: #FFFFFF;
+  background-color: var(--bg-input);
   border: 1px solid var(--gray-300);
   border-radius: var(--radius-sm);
   padding: 0.35rem 0.75rem 0.35rem 1rem;
@@ -946,7 +946,7 @@
   padding: 0.45rem 0.95rem;
   border-radius: var(--radius-full);
   border: 1px solid var(--gray-300);
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   color: var(--gray-700);
   font-size: 0.85rem;
   font-weight: 500;
@@ -1052,7 +1052,7 @@
 }
 
 .work-type-btn.active {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
@@ -1063,7 +1063,8 @@
   font-size: 0.85rem;
   border: 1px solid var(--gray-300);
   border-radius: var(--radius-sm);
-  background-color: #FFFFFF;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   color: var(--gray-700);
   outline: none;
   cursor: pointer;
@@ -1075,7 +1076,7 @@
 
 /* Empty State */
 .empty-results-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 4rem 2rem;
@@ -1106,7 +1107,7 @@
    10. JOB DETAILS PAGE (/jobs/:id)
    -------------------------------------------------- */
 .details-top-bar {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   padding: 1rem 0;
 }
@@ -1168,7 +1169,7 @@
 }
 
 .details-header-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 2rem;
@@ -1241,7 +1242,7 @@
 }
 
 .details-section-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 2rem;
@@ -1306,7 +1307,7 @@
 }
 
 .sticky-sidebar-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 1.75rem;
@@ -1521,7 +1522,7 @@
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--gray-300);
   border-radius: var(--radius-sm);
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   color: var(--text-primary);
   font-size: 0.925rem;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -1703,7 +1704,7 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 1.15rem;
-  background: #FFFFFF;
+  background: var(--bg-card);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1741,7 +1742,7 @@
   width: 100%;
   margin: 1.5rem auto;
   border-radius: var(--radius-lg);
-  background: #FFFFFF;
+  background: var(--bg-card);
   box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.06);
   display: flex;
   flex-direction: column;
@@ -1757,7 +1758,7 @@
   justify-content: space-between;
   padding: 1.5rem 1.75rem 1.15rem;
   border-bottom: 1px solid var(--border-light);
-  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-surface) 100%);
   position: relative;
   flex-shrink: 0;
 }
@@ -1868,7 +1869,7 @@
 }
 
 .auth-tab-btn.active {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   color: var(--primary);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -1899,7 +1900,7 @@
   padding: 0.85rem;
   border: 1.5px solid var(--gray-200);
   border-radius: var(--radius-md);
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   cursor: pointer;
   transition: all var(--transition-fast);
   user-select: none;
@@ -1907,7 +1908,7 @@
 
 .auth-role-card:hover {
   border-color: var(--primary-border);
-  background-color: #FAFCFF;
+  background-color: var(--bg-hover);
 }
 
 .auth-role-card.selected {
@@ -1985,7 +1986,8 @@
   padding: 0.7rem 0.9rem 0.7rem 2.6rem;
   border: 1px solid var(--gray-300);
   border-radius: var(--radius-sm);
-  background-color: #FFFFFF;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   color: var(--text-primary);
   font-size: 0.925rem;
   line-height: 1.4;
@@ -2006,7 +2008,7 @@
 
 .auth-input.has-error {
   border-color: var(--error);
-  background-color: #FFFDFD;
+  background-color: var(--error-bg);
 }
 
 .auth-input.has-error:focus {
@@ -2063,13 +2065,13 @@
 .auth-alert-error {
   background-color: var(--error-bg);
   border: 1px solid var(--error-border);
-  color: #B91C1C;
+  color: var(--error);
 }
 
 .auth-alert-success {
   background-color: var(--success-bg);
   border: 1px solid var(--success-border);
-  color: #15803D;
+  color: var(--success);
 }
 
 /* Submit Button */
@@ -2093,7 +2095,7 @@
 
 /* 1-Click Quick Demo Box */
 .auth-demo-box {
-  background-color: #F8FAFC;
+  background-color: var(--bg-surface);
   border: 1px dashed var(--gray-300);
   border-radius: var(--radius-md);
   padding: 1rem 1.15rem;
@@ -2136,7 +2138,7 @@
   align-items: center;
   justify-content: center;
   padding: 0.5rem 0.4rem;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-sm);
   font-size: 0.78rem;
@@ -2181,7 +2183,7 @@
    12. CONTACT PAGE (/contact)
    -------------------------------------------------- */
 .contact-header-section {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   padding: 3.5rem 0 2.5rem;
 }
@@ -2237,7 +2239,7 @@
   display: flex;
   align-items: flex-start;
   gap: 1rem;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 1.25rem 1.5rem;
@@ -2295,7 +2297,7 @@
   gap: 0.65rem;
   font-size: 0.825rem;
   color: var(--text-muted);
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
@@ -2303,7 +2305,7 @@
 
 /* Contact Form Card */
 .contact-form-card {
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   padding: 2.25rem;
@@ -2354,7 +2356,7 @@
 /* FAQ Cards */
 .contact-faq-section {
   padding: 4rem 0 5rem;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-top: 1px solid var(--border-light);
 }
 

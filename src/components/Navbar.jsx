@@ -1,444 +1,448 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, ArrowRight, User, LogOut, FileText, PlusCircle } from 'lucide-react';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import {
+  Menu,
+  X,
+  ArrowRight,
+  User,
+  LogOut,
+  FileText,
+  PlusCircle,
+  LayoutDashboard,
+  Bookmark,
+  Bell,
+  Settings,
+  ChevronDown,
+} from 'lucide-react';
 import dgLogo from '../assets/dg-interns-hub-logo.png';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, useSavedJobs } from '../hooks/useContexts';
 import ThemeToggle from './ThemeToggle';
 import NotificationDropdown from './NotificationDropdown';
 
 const Navbar = ({ onOpenMyApplications, onOpenPostJob }) => {
-  const { user, isAuthenticated, logout, openAuth } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
+  const { savedCount } = useSavedJobs();
+  const [mobileMenuPath, setMobileMenuPath] = useState(null);
+  const [userDropdownPath, setUserDropdownPath] = useState(null);
+  const dropdownRef = useRef(null);
   const navigate = useNavigate();
-  const logoTargetRef = useRef(null);
+  const location = useLocation();
 
-  // Check if session has already experienced the intro animation
-  const [introState, setIntroState] = useState(() => {
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        const seen = window.sessionStorage.getItem('dg_logo_intro_seen');
-        return seen ? 'done' : 'init';
-      }
-    } catch {
-      return 'done';
-    }
-    return 'done';
-  });
+  const mobileMenuOpen = mobileMenuPath === location.pathname;
+  const userDropdownOpen = userDropdownPath === location.pathname;
+  const setMobileMenuOpen = (val) =>
+    setMobileMenuPath((prev) => (typeof val === 'function' ? val(prev === location.pathname) : val) ? location.pathname : null);
+  const setUserDropdownOpen = (val) =>
+    setUserDropdownPath((prev) => (typeof val === 'function' ? val(prev === location.pathname) : val) ? location.pathname : null);
 
-  // Animated intro logo state (pixel coordinates for smooth natural easing)
-  const [animStyle, setAnimStyle] = useState({
-    opacity: 0,
-    transform: 'scale(1.18)',
-    left: typeof window !== 'undefined' ? (window.innerWidth - 110) / 2 : 0,
-    top: typeof window !== 'undefined' ? window.innerHeight * 0.28 : 0,
-    width: 110,
-    transition: 'none'
-  });
-
+  // Close user menu on outside click / Escape
   useEffect(() => {
-    if (introState === 'done') return;
-
-    // Calculate initial center/top-center coordinates
-    const initialWidth = window.innerWidth <= 768 ? 90 : 115;
-    const initialLeft = (window.innerWidth - initialWidth) / 2;
-    const initialTop = window.innerHeight * (window.innerWidth <= 768 ? 0.25 : 0.28);
-
-    setAnimStyle({
-      opacity: 0,
-      transform: 'scale(1.15)',
-      left: initialLeft,
-      top: initialTop,
-      width: initialWidth,
-      transition: 'none'
-    });
-
-    // Step 1: Smooth fade-in and scale-in at top-center (~40ms -> 350ms)
-    const timerAppear = setTimeout(() => {
-      setIntroState('visible');
-      setAnimStyle((prev) => ({
-        ...prev,
-        opacity: 1,
-        transform: 'scale(1.04)',
-        transition: 'opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-      }));
-    }, 50);
-
-    // Step 2: Smooth glide to the left side of the Navbar (~420ms -> 1450ms)
-    const timerGlide = setTimeout(() => {
-      if (logoTargetRef.current) {
-        const targetRect = logoTargetRef.current.getBoundingClientRect();
-        const targetWidth = targetRect.width > 0 ? targetRect.width : (window.innerWidth <= 768 ? 40 : 52);
-        const targetLeft = targetRect.left > 0 ? targetRect.left : (window.innerWidth <= 768 ? 16 : Math.max(16, (window.innerWidth - 1200) / 2 + 24));
-        const targetTop = targetRect.top >= 0 ? targetRect.top : 10;
-
-        setIntroState('gliding');
-        setAnimStyle({
-          opacity: 1,
-          left: targetLeft,
-          top: targetTop,
-          width: targetWidth,
-          transform: 'scale(1)',
-          // 1.02s natural ease-out curve directly into final navbar position
-          transition: 'left 1.02s cubic-bezier(0.2, 0.8, 0.2, 1), top 1.02s cubic-bezier(0.2, 0.8, 0.2, 1), width 1.02s cubic-bezier(0.2, 0.8, 0.2, 1), transform 1.02s cubic-bezier(0.2, 0.8, 0.2, 1)'
-        });
+    const handleOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setUserDropdownPath(null);
       }
-    }, 420);
-
-    // Step 3: Animation completes, settle permanently into navbar (~1.48s total)
-    const timerDone = setTimeout(() => {
-      setIntroState('done');
-      try {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.setItem('dg_logo_intro_seen', 'true');
-        }
-      } catch {}
-    }, 1480);
-
-    // Fallback failsafe: unconditionally guarantee animation ends
-    const fallbackTimer = setTimeout(() => {
-      setIntroState('done');
-    }, 1800);
-
-    return () => {
-      clearTimeout(timerAppear);
-      clearTimeout(timerGlide);
-      clearTimeout(timerDone);
-      clearTimeout(fallbackTimer);
     };
-  }, []); // Run once on mount
+    const handleKey = (e) => {
+      if (e.key === 'Escape') {
+        setUserDropdownPath(null);
+        setMobileMenuPath(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, []);
 
-  const handleLinkClick = () => {
+  const handleLogout = async () => {
+    setUserDropdownOpen(false);
     setMobileMenuOpen(false);
+    await logout();
+    navigate('/');
   };
 
-  const isIntroRunning = introState !== 'done';
+  const initials = (user?.name || 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('');
+
+  const role = user?.role || 'candidate';
 
   return (
-    <>
-      {/* Intro Backdrop Overlay (Soft white curtain that dissolves during glide) */}
-      {isIntroRunning && (
-        <div 
-          className={`logo-intro-backdrop ${introState === 'gliding' ? 'fade-out' : ''}`}
-          aria-hidden="true"
-        />
-      )}
+    <header className="navbar-header">
+      <div className="container navbar-container">
+        {/* Brand Logo */}
+        <Link to="/" className="navbar-brand" aria-label="DG Interns Hub Home">
+          <img
+            src={dgLogo}
+            alt="DG Interns Hub"
+            className="navbar-brand-logo"
+            style={{ width: '38px', height: '38px', borderRadius: '10px', objectFit: 'cover' }}
+          />
+          <div className="brand-text-group">
+            <span className="brand-title">DG Interns Hub</span>
+            <span className="brand-tagline">Talent & Internship Portal</span>
+          </div>
+        </Link>
 
-      {/* Floating Animated Intro Logo Asset */}
-      {isIntroRunning && (
-        <img
-          src={dgLogo}
-          alt="DG Interns Hub Logo"
-          className="logo-intro-animating-asset"
-          style={{
-            position: 'fixed',
-            left: `${animStyle.left}px`,
-            top: `${animStyle.top}px`,
-            width: `${animStyle.width}px`,
-            height: 'auto',
-            opacity: animStyle.opacity,
-            transform: animStyle.transform,
-            transition: animStyle.transition,
-            zIndex: 9999,
-            pointerEvents: 'none',
-            objectFit: 'contain'
-          }}
-        />
-      )}
-
-      {/* Primary Sticky Header */}
-      <header className="navbar-header">
-        <div className="container navbar-container">
-          {/* Brand Logo & Name */}
-          <Link to="/" className="navbar-brand" onClick={handleLinkClick}>
-            <img 
-              ref={logoTargetRef}
-              src={dgLogo} 
-              alt="DG Interns Hub Logo" 
-              className="navbar-brand-logo"
-              style={{
-                opacity: isIntroRunning ? 0 : 1,
-                transition: 'opacity 0.25s ease'
-              }}
-            />
-            <div 
-              className="brand-text-group"
-              style={{
-                opacity: introState === 'done' || introState === 'gliding' ? 1 : 0,
-                transition: 'opacity 0.4s ease 0.2s'
-              }}
-            >
-              <span className="brand-title">DG Interns Hub</span>
-              <span className="brand-tagline">Careers & Internships</span>
-            </div>
-          </Link>
-
-          {/* Desktop Navigation Links */}
-          <nav className="desktop-nav">
-            <NavLink 
-              to="/" 
+        {/* Desktop Links */}
+        <nav className="desktop-nav" aria-label="Main navigation">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            Home
+          </NavLink>
+          <NavLink
+            to="/jobs"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            Internships
+          </NavLink>
+          <NavLink
+            to="/contact"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            Contact
+          </NavLink>
+          {isAuthenticated && (
+            <NavLink
+              to="/dashboard"
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            >
+              Dashboard
+            </NavLink>
+          )}
+          {isAuthenticated && role === 'candidate' && (
+            <NavLink
+              to="/applications"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            >
+              Applications
+            </NavLink>
+          )}
+        </nav>
+
+        {/* Desktop Right Actions */}
+        <div className="navbar-actions">
+          <ThemeToggle />
+
+          {isAuthenticated ? (
+            <>
+              <NotificationDropdown />
+
+              {role === 'recruiter' && onOpenPostJob && (
+                <button
+                  type="button"
+                  onClick={onOpenPostJob}
+                  className="btn btn-primary btn-sm desktop-only-cta"
+                >
+                  <PlusCircle size={15} />
+                  <span>Post Job</span>
+                </button>
+              )}
+
+              {/* User Menu Dropdown */}
+              <div ref={dropdownRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setUserDropdownOpen((prev) => !prev)}
+                  className="nav-user-pill"
+                  aria-expanded={userDropdownOpen}
+                  aria-haspopup="menu"
+                >
+                  <span className="nav-user-avatar">{initials}</span>
+                  <span style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user?.name?.split(' ')[0] || 'Account'}
+                  </span>
+                  <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
+                </button>
+
+                {userDropdownOpen && (
+                  <div
+                    role="menu"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      width: '240px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-light)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: 'var(--shadow-lg)',
+                      padding: '8px',
+                      zIndex: 300,
+                      animation: 'fadeIn 0.14s ease-out',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                        {user?.name}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                        {user?.email}
+                      </div>
+                      <span
+                        className="badge badge-blue"
+                        style={{ marginTop: '6px', textTransform: 'capitalize' }}
+                      >
+                        {role}
+                      </span>
+                    </div>
+
+                    <Link
+                      to="/dashboard"
+                      className="workspace-nav-link"
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <span className="workspace-nav-link-inner">
+                        <LayoutDashboard size={15} />
+                        <span>Dashboard</span>
+                      </span>
+                    </Link>
+
+                    <Link
+                      to="/profile"
+                      className="workspace-nav-link"
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <span className="workspace-nav-link-inner">
+                        <User size={15} />
+                        <span>Profile & Resume</span>
+                      </span>
+                    </Link>
+
+                    <Link
+                      to="/saved-jobs"
+                      className="workspace-nav-link"
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <span className="workspace-nav-link-inner">
+                        <Bookmark size={15} />
+                        <span>Saved Jobs</span>
+                      </span>
+                      {savedCount > 0 && <span className="workspace-nav-badge">{savedCount}</span>}
+                    </Link>
+
+                    {(role === 'candidate' || role === 'admin') && (
+                      <Link
+                        to="/applications"
+                        className="workspace-nav-link"
+                        onClick={() => setUserDropdownOpen(false)}
+                      >
+                        <span className="workspace-nav-link-inner">
+                          <FileText size={15} />
+                          <span>{role === 'admin' ? 'All Applications' : 'My Applications'}</span>
+                        </span>
+                      </Link>
+                    )}
+
+                    {role === 'candidate' && onOpenMyApplications && (
+                      <button
+                        type="button"
+                        className="workspace-nav-link"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenMyApplications();
+                        }}
+                      >
+                        <span className="workspace-nav-link-inner">
+                          <FileText size={15} />
+                          <span>Quick App Drawer</span>
+                        </span>
+                      </button>
+                    )}
+
+                    <Link
+                      to="/notifications"
+                      className="workspace-nav-link"
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <span className="workspace-nav-link-inner">
+                        <Bell size={15} />
+                        <span>Notifications</span>
+                      </span>
+                    </Link>
+
+                    <Link
+                      to="/settings"
+                      className="workspace-nav-link"
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      <span className="workspace-nav-link-inner">
+                        <Settings size={15} />
+                        <span>Settings</span>
+                      </span>
+                    </Link>
+
+                    <div
+                      style={{
+                        borderTop: '1px solid var(--border-subtle)',
+                        marginTop: '6px',
+                        paddingTop: '6px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="workspace-nav-link"
+                        style={{ color: 'var(--error)' }}
+                      >
+                        <span className="workspace-nav-link-inner">
+                          <LogOut size={15} />
+                          <span>Sign Out</span>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="desktop-only-auth" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Link to="/login" className="btn btn-secondary btn-sm">
+                Sign In
+              </Link>
+              <Link to="/register" className="btn btn-primary btn-sm nav-cta-btn">
+                <span>Get Started</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
+
+          {/* Mobile Hamburger Toggle */}
+          <button
+            type="button"
+            className="nav-icon-btn mobile-menu-toggle"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="mobile-nav-drawer" role="dialog" aria-label="Mobile navigation">
+          <div className="mobile-nav-links">
+            <NavLink
+              to="/"
               end
+              className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
             >
               Home
             </NavLink>
-            <NavLink 
-              to="/jobs" 
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            <NavLink
+              to="/jobs"
+              className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
             >
-              Jobs
+              Browse Internships
             </NavLink>
-            {isAuthenticated && (
-              <NavLink 
-                to="/dashboard" 
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-              >
-                Dashboard
-              </NavLink>
-            )}
-            <NavLink 
-              to="/contact" 
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            <NavLink
+              to="/saved-jobs"
+              className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
             >
-              Contact
+              Saved Internships {savedCount > 0 ? `(${savedCount})` : ''}
             </NavLink>
-          </nav>
+            <NavLink
+              to="/contact"
+              className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
+            >
+              Contact & Support
+            </NavLink>
 
-          {/* Action Buttons & Auth */}
-          <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             {isAuthenticated ? (
-              <div className="navbar-user-group" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                {user?.role === 'candidate' && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={onOpenMyApplications}
-                    title="View My Applications"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <FileText size={14} />
-                    <span>My Applications</span>
-                  </button>
-                )}
-
-                {(user?.role === 'recruiter' || user?.role === 'admin') && (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={onOpenPostJob}
-                    title="Post a New Job"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <PlusCircle size={14} />
-                    <span>Post Job</span>
-                  </button>
-                )}
-
-                <div 
-                  className="user-profile-badge" 
-                  onClick={() => navigate('/profile')}
-                  title="View / Edit Profile"
+              <>
+                <div
                   style={{
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '0.4rem', 
-                    padding: '0.35rem 0.65rem', 
-                    background: '#f1f5f9', 
-                    borderRadius: '20px',
-                    fontSize: '0.825rem',
-                    fontWeight: 500,
-                    color: '#0f172a',
-                    cursor: 'pointer'
+                    height: '1px',
+                    backgroundColor: 'var(--border-light)',
+                    margin: '8px 0',
                   }}
-                >
-                  <User size={13} className="text-primary" />
-                  <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {user?.name?.split(' ')[0]}
-                  </span>
-                  <span 
-                    style={{
-                      fontSize: '0.7rem',
-                      padding: '0.1rem 0.4rem',
-                      borderRadius: '10px',
-                      textTransform: 'uppercase',
-                      fontWeight: 700,
-                      background: user?.role === 'admin' ? '#fef3c7' : user?.role === 'recruiter' ? '#ede9fe' : '#e0f2fe',
-                      color: user?.role === 'admin' ? '#b45309' : user?.role === 'recruiter' ? '#6d28d9' : '#0369a1'
-                    }}
-                  >
-                    {user?.role}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={logout}
-                  title="Sign Out"
-                  style={{ padding: '0.45rem' }}
-                >
-                  <LogOut size={14} />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => openAuth('login')}
-              >
-                <span>Sign In</span>
-              </button>
-            )}
-
-            {/* Persistent Notifications (Authenticated) */}
-            {isAuthenticated && <NotificationDropdown />}
-
-            {/* Dark/Light Theme Switcher */}
-            <ThemeToggle />
-
-            <button 
-              type="button" 
-              className="btn btn-primary btn-sm nav-cta-btn"
-              onClick={() => {
-                navigate('/jobs');
-                setMobileMenuOpen(false);
-              }}
-            >
-              <span>Explore Internships</span>
-              <ArrowRight size={15} />
-            </button>
-
-            {/* Mobile Menu Toggle Button */}
-            <button 
-              type="button" 
-              className="mobile-menu-toggle"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle navigation menu"
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Navigation Drawer */}
-        {mobileMenuOpen && (
-          <div className="mobile-nav-drawer">
-            <nav className="mobile-nav-links">
-              <NavLink 
-                to="/" 
-                className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
-                onClick={handleLinkClick}
-                end
-              >
-                Home
-              </NavLink>
-              <NavLink 
-                to="/jobs" 
-                className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Jobs
-              </NavLink>
-              {isAuthenticated && (
-                <NavLink 
-                  to="/dashboard" 
+                />
+                <NavLink
+                  to="/dashboard"
                   className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
-                  onClick={handleLinkClick}
                 >
-                  Dashboard
+                  Dashboard ({role})
                 </NavLink>
-              )}
-              <NavLink 
-                to="/contact" 
-                className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Contact
-              </NavLink>
-
-              {/* Mobile Auth Actions */}
-              <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border-light, #e2e8f0)', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0.5rem' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Theme Mode</span>
-                  <ThemeToggle />
-                </div>
-                {isAuthenticated ? (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>
-                      <span>Signed in as <strong>{user?.name}</strong></span>
-                      <span style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: '#e2e8f0' }}>{user?.role}</span>
-                    </div>
-                    {user?.role === 'candidate' && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        style={{ width: '100%' }}
-                        onClick={() => {
-                          setMobileMenuOpen(false);
-                          if (onOpenMyApplications) onOpenMyApplications();
-                        }}
-                      >
-                        My Applications
-                      </button>
-                    )}
-                    {(user?.role === 'recruiter' || user?.role === 'admin') && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        style={{ width: '100%' }}
-                        onClick={() => {
-                          setMobileMenuOpen(false);
-                          if (onOpenPostJob) onOpenPostJob();
-                        }}
-                      >
-                        Post a Job
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ width: '100%', color: '#ef4444' }}
-                      onClick={() => {
-                        logout();
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      Sign Out
-                    </button>
-                  </>
-                ) : (
+                {(role === 'candidate' || role === 'admin') && (
+                  <NavLink
+                    to="/applications"
+                    className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
+                  >
+                    Applications
+                  </NavLink>
+                )}
+                <NavLink
+                  to="/notifications"
+                  className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
+                >
+                  Notifications
+                </NavLink>
+                <NavLink
+                  to="/profile"
+                  className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
+                >
+                  Profile & Resume
+                </NavLink>
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
+                >
+                  Settings
+                </NavLink>
+                {role === 'recruiter' && onOpenPostJob && (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '100%' }}
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      openAuth('login');
+                      onOpenPostJob();
                     }}
+                    className="btn btn-primary"
+                    style={{ width: '100%', marginTop: '8px' }}
                   >
-                    Sign In / Register
+                    <PlusCircle size={16} />
+                    <span>Post New Internship</span>
                   </button>
                 )}
-              </div>
-
-              <div className="mobile-drawer-cta">
-                <button 
-                  type="button" 
-                  className="btn btn-primary btn-lg" 
-                  style={{ width: '100%' }}
-                  onClick={() => {
-                    navigate('/jobs');
-                    setMobileMenuOpen(false);
-                  }}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="btn btn-danger"
+                  style={{ width: '100%', marginTop: '8px' }}
                 >
-                  Explore Internships
+                  <LogOut size={16} />
+                  <span>Sign Out</span>
                 </button>
+              </>
+            ) : (
+              <div className="mobile-drawer-cta" style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
+                <Link to="/login" className="btn btn-secondary" style={{ width: '100%' }}>
+                  Sign In
+                </Link>
+                <Link to="/register" className="btn btn-primary" style={{ width: '100%' }}>
+                  Create Free Account
+                </Link>
               </div>
-            </nav>
+            )}
           </div>
-        )}
-      </header>
-    </>
+        </div>
+      )}
+    </header>
   );
 };
 

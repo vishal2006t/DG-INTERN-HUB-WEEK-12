@@ -81,3 +81,36 @@ export const markAllAsRead = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Delete a notification belonging to current user
+// @route   DELETE /api/notifications/:id
+// @access  Private (Owner)
+export const deleteNotification = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid notification ID');
+    }
+
+    const deleted = await Notification.findOneAndDelete({
+      _id: id,
+      recipient: req.user._id
+    });
+
+    if (!deleted) {
+      return sendError(res, 404, 'Notification not found');
+    }
+
+    const unreadCount = await Notification.countDocuments({
+      recipient: req.user._id,
+      isRead: false
+    });
+
+    return sendSuccess(res, 200, 'Notification deleted', {
+      unreadCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};

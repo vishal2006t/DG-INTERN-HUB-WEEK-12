@@ -37,3 +37,4 @@ uploads/
 *.sln
 *.sw?
 .kilo/
+node_modules

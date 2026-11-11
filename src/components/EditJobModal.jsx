@@ -1,241 +1,448 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { api } from '../services/api';
+import { Briefcase, X, AlertCircle, Save } from 'lucide-react';
+import api from '../services/api';
+import { useToast } from '../hooks/useContexts';
+const CATEGORIES = [
+  'Web Development',
+  'Full Stack Development',
+  'Python & AI',
+  'UI/UX Design',
+  'Data Science & Analytics',
+  'Cloud & DevOps',
+  'Cyber Security',
+];
 
-const EditJobModal = ({ isOpen, job, onClose, onJobUpdated }) => {
-  const [formData, setFormData] = useState({
-    title: '',
-    company: '',
-    location: '',
-    workType: 'Remote',
-    category: 'Web Development',
-    stipend: '',
-    duration: '3 Months',
-    openings: 1,
-    skills: '',
-    description: '',
-    status: 'open'
-  });
-
-  const [loading, setLoading] = useState(false);
+const EditJobModalContent = ({ job, onClose, onJobUpdated }) => {
+  const toast = useToast();
+  const [formData, setFormData] = useState(() => ({
+    title: job.title || '',
+    company: typeof job.company === 'string' ? job.company : job.company?.name || '',
+    category: job.category || 'Web Development',
+    workType: job.workType || 'Remote',
+    type: job.type || 'internship',
+    experienceLevel: job.experienceLevel || 'Fresher',
+    status: job.status || 'open',
+    location: job.location || '',
+    duration: job.duration || '',
+    stipend: job.stipend || '',
+    openings: job.openings ?? 1,
+    deadline: job.deadline ? new Date(job.deadline).toISOString().split('T')[0] : '',
+    featured: Boolean(job.featured),
+    skills: Array.isArray(job.skills) ? job.skills.join(', ') : '',
+    description: job.description || '',
+    responsibilities: Array.isArray(job.responsibilities) ? job.responsibilities.join('\n') : '',
+    requirements: Array.isArray(job.requirements) ? job.requirements.join('\n') : '',
+  }));
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (job) {
-      setFormData({
-        title: job.title || '',
-        company: job.company || '',
-        location: job.location || 'Remote',
-        workType: job.workType || 'Remote',
-        category: job.category || 'Web Development',
-        stipend: job.stipend || '₹20,000 / month',
-        duration: job.duration || '3 Months',
-        openings: job.openings || 1,
-        skills: Array.isArray(job.skills) ? job.skills.join(', ') : (job.skills || ''),
-        description: job.description || '',
-        status: job.status || 'open'
-      });
-      setError('');
-      setSuccess(false);
-    }
-  }, [job]);
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [submitting, onClose]);
 
-  if (!isOpen || !job) return null;
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (error) setError('');
-  };
+  const parseLines = (text) =>
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.company || !formData.description) {
-      setError('Title, company, and description are required.');
+    setError('');
+    if (!formData.title.trim() || !formData.company.trim() || !formData.description.trim()) {
+      setError('Title, company name, and description are required.');
       return;
     }
 
-    setLoading(true);
-    setError('');
+    const parsedSkills = formData.skills
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parsedSkills.length === 0) {
+      setError('Please enter at least one required skill.');
+      return;
+    }
 
+    const numericStipend = Number(String(formData.stipend).replace(/[^0-9]/g, '')) || 0;
+
+    setSubmitting(true);
     try {
-      const skillsArray = typeof formData.skills === 'string'
-        ? formData.skills.split(',').map((s) => s.trim()).filter(Boolean)
-        : formData.skills;
-
       const payload = {
-        ...formData,
-        skills: skillsArray,
-        openings: parseInt(formData.openings, 10) || 1
+        title: formData.title.trim(),
+        company: formData.company.trim(),
+        category: formData.category,
+        workType: formData.workType,
+        type: formData.type,
+        experienceLevel: formData.experienceLevel,
+        status: formData.status,
+        location: formData.location.trim(),
+        duration: formData.duration.trim(),
+        stipend: formData.stipend.trim(),
+        stipendAmount: numericStipend,
+        openings: Math.max(1, Number(formData.openings) || 1),
+        featured: Boolean(formData.featured),
+        skills: parsedSkills,
+        description: formData.description.trim(),
+        responsibilities: parseLines(formData.responsibilities),
+        requirements: parseLines(formData.requirements),
       };
+      if (formData.deadline) {
+        payload.deadline = formData.deadline;
+      }
 
-      const jobId = job._id || job.id;
-      const res = await api.jobs.update(jobId, payload);
-      setSuccess(true);
-      if (onJobUpdated) onJobUpdated(res.data);
-      setTimeout(() => {
-        setSuccess(false);
-        onClose();
-      }, 1000);
+      await api.jobs.update(job._id || job.id, payload);
+      toast.success('Job listing updated.');
+      if (onJobUpdated) onJobUpdated();
+      onClose();
     } catch (err) {
-      setError(err.message || 'Failed to update job posting');
+      const msg = err.message || 'Unable to update listing.';
+      setError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
     <div
       className="modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="edit-job-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
     >
-      <div className="modal-container" style={{ maxWidth: '580px' }}>
-        <div className="modal-header">
-          <div>
-            <span className="modal-eyebrow">Recruiter Management</span>
-            <h3 className="modal-title">Edit Job Opportunity</h3>
+      <div className="modal-container" style={{ maxWidth: '660px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '18px 24px',
+            borderBottom: '1px solid var(--border-light)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Briefcase size={20} style={{ color: 'var(--primary)' }} />
+            <h2 id="edit-job-title" style={{ margin: 0, fontSize: '1.2rem' }}>
+              Edit Job Listing
+            </h2>
           </div>
-          <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close dialog">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="btn-ghost"
+            aria-label="Close modal"
+            style={{ padding: '6px', borderRadius: '8px' }}
+          >
             <X size={20} />
           </button>
         </div>
 
-        {error && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'var(--error-bg, #fee2e2)', color: 'var(--error, #b91c1c)', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-        )}
+        <form onSubmit={handleSubmit} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {error && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                backgroundColor: 'var(--error-bg)',
+                color: 'var(--error)',
+                border: '1px solid var(--error-border)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.86rem',
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
 
-        {success && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'var(--success-bg, #dcfce7)', color: 'var(--success, #15803d)', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            <CheckCircle2 size={16} />
-            <span>Job listing updated successfully!</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="application-form" style={{ gap: '0.9rem' }}>
           <div className="form-row-2">
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-title">Job Title <span className="required-star">*</span></label>
+            <div>
+              <label htmlFor="edit-title" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Job Title <span className="required-star">*</span>
+              </label>
               <input
-                id="edit-job-title"
+                id="edit-title"
                 type="text"
-                name="title"
-                className="form-input"
+                className="saas-input"
                 value={formData.title}
-                onChange={handleChange}
+                onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
                 required
               />
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-company">Company Name <span className="required-star">*</span></label>
+
+            <div>
+              <label htmlFor="edit-company" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Company <span className="required-star">*</span>
+              </label>
               <input
-                id="edit-job-company"
+                id="edit-company"
                 type="text"
-                name="company"
-                className="form-input"
+                className="saas-input"
                 value={formData.company}
-                onChange={handleChange}
+                onChange={(e) => setFormData((p) => ({ ...p, company: e.target.value }))}
                 required
               />
             </div>
           </div>
 
-          <div className="form-row-3">
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-worktype">Work Mode</label>
-              <select id="edit-job-worktype" name="workType" className="form-input" value={formData.workType} onChange={handleChange}>
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="edit-category" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Category
+              </label>
+              <select
+                id="edit-category"
+                className="saas-select"
+                value={formData.category}
+                onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                {!CATEGORIES.includes(formData.category) && (
+                  <option value={formData.category}>{formData.category}</option>
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="edit-status" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Listing Status
+              </label>
+              <select
+                id="edit-status"
+                className="saas-select"
+                value={formData.status}
+                onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
+              >
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="edit-workType" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Work Mode
+              </label>
+              <select
+                id="edit-workType"
+                className="saas-select"
+                value={formData.workType}
+                onChange={(e) => setFormData((p) => ({ ...p, workType: e.target.value }))}
+              >
                 <option value="Remote">Remote</option>
                 <option value="Hybrid">Hybrid</option>
                 <option value="On-site">On-site</option>
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-category">Category</label>
-              <select id="edit-job-category" name="category" className="form-input" value={formData.category} onChange={handleChange}>
-                <option value="Web Development">Web Development</option>
-                <option value="Python & AI">Python & AI</option>
-                <option value="Full Stack Development">Full Stack</option>
-                <option value="UI/UX Design">UI/UX Design</option>
-                <option value="Data Science & Analytics">Data Science</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-status">Listing Status</label>
-              <select id="edit-job-status" name="status" className="form-input" value={formData.status} onChange={handleChange}>
-                <option value="open">Active / Open</option>
-                <option value="closed">Closed</option>
+
+            <div>
+              <label htmlFor="edit-experience" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Experience Level
+              </label>
+              <select
+                id="edit-experience"
+                className="saas-select"
+                value={formData.experienceLevel}
+                onChange={(e) => setFormData((p) => ({ ...p, experienceLevel: e.target.value }))}
+              >
+                <option value="Fresher">Fresher</option>
+                <option value="0-1 Years">0-1 Years</option>
+                <option value="1-3 Years">1-3 Years</option>
+                <option value="3+ Years">3+ Years</option>
               </select>
             </div>
           </div>
 
           <div className="form-row-2">
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-stipend">Stipend</label>
-              <input
-                id="edit-job-stipend"
-                type="text"
-                name="stipend"
-                className="form-input"
-                value={formData.stipend}
-                onChange={handleChange}
-              />
+            <div>
+              <label htmlFor="edit-type" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Engagement Type
+              </label>
+              <select
+                id="edit-type"
+                className="saas-select"
+                value={formData.type}
+                onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
+              >
+                <option value="internship">Internship</option>
+                <option value="full-time">Full-Time</option>
+                <option value="part-time">Part-Time</option>
+                <option value="contract">Contract</option>
+              </select>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-job-duration">Duration</label>
+
+            <div>
+              <label htmlFor="edit-location" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Location
+              </label>
               <input
-                id="edit-job-duration"
+                id="edit-location"
                 type="text"
-                name="duration"
-                className="form-input"
-                value={formData.duration}
-                onChange={handleChange}
+                className="saas-input"
+                value={formData.location}
+                onChange={(e) => setFormData((p) => ({ ...p, location: e.target.value }))}
               />
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="edit-job-skills">Skills (comma separated)</label>
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="edit-stipend" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Stipend / Salary
+              </label>
+              <input
+                id="edit-stipend"
+                type="text"
+                className="saas-input"
+                value={formData.stipend}
+                onChange={(e) => setFormData((p) => ({ ...p, stipend: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-duration" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Duration & Openings
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 82px', gap: '8px' }}>
+                <input
+                  id="edit-duration"
+                  type="text"
+                  className="saas-input"
+                  value={formData.duration}
+                  onChange={(e) => setFormData((p) => ({ ...p, duration: e.target.value }))}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  aria-label="Openings"
+                  className="saas-input"
+                  value={formData.openings}
+                  onChange={(e) => setFormData((p) => ({ ...p, openings: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="edit-deadline" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Deadline
+              </label>
+              <input
+                id="edit-deadline"
+                type="date"
+                className="saas-input"
+                value={formData.deadline}
+                onChange={(e) => setFormData((p) => ({ ...p, deadline: e.target.value }))}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '8px' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '0.86rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.featured}
+                  onChange={(e) => setFormData((p) => ({ ...p, featured: e.target.checked }))}
+                />
+                <span>Featured Internship Listing</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="edit-skills" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+              Skills (comma-separated)
+            </label>
             <input
-              id="edit-job-skills"
+              id="edit-skills"
               type="text"
-              name="skills"
-              className="form-input"
+              className="saas-input"
               value={formData.skills}
-              onChange={handleChange}
+              onChange={(e) => setFormData((p) => ({ ...p, skills: e.target.value }))}
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="edit-job-desc">Description <span className="required-star">*</span></label>
+          <div>
+            <label htmlFor="edit-description" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+              Description <span className="required-star">*</span>
+            </label>
             <textarea
-              id="edit-job-desc"
-              name="description"
-              className="form-textarea"
+              id="edit-description"
               rows={3}
+              className="saas-textarea"
               value={formData.description}
-              onChange={handleChange}
+              onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
               required
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 1 }}>
+          <div className="form-row-2">
+            <div>
+              <label htmlFor="edit-resp" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Responsibilities (one per line)
+              </label>
+              <textarea
+                id="edit-resp"
+                rows={3}
+                className="saas-textarea"
+                value={formData.responsibilities}
+                onChange={(e) => setFormData((p) => ({ ...p, responsibilities: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-req" style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, marginBottom: '5px' }}>
+                Requirements (one per line)
+              </label>
+              <textarea
+                id="edit-req"
+                rows={3}
+                className="saas-textarea"
+                value={formData.requirements}
+                onChange={(e) => setFormData((p) => ({ ...p, requirements: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
+            <button type="button" onClick={onClose} disabled={submitting} className="btn btn-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
-              {loading ? 'Saving Changes...' : 'Save Changes'}
+            <button type="submit" disabled={submitting} className="btn btn-primary">
+              <Save size={16} />
+              <span>{submitting ? 'Saving...' : 'Save Changes'}</span>
             </button>
           </div>
         </form>
       </div>
     </div>
+  );
+};
+
+const EditJobModal = ({ isOpen, job, onClose, onJobUpdated }) => {
+  if (!isOpen || !job) return null;
+  return (
+    <EditJobModalContent
+      key={job._id || job.id}
+      job={job}
+      onClose={onClose}
+      onJobUpdated={onJobUpdated}
+    />
   );
 };
 

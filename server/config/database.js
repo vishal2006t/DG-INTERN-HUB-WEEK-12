@@ -46,7 +46,8 @@ export const connectDB = async () => {
     console.log(`[Database] Connecting to MongoDB: ${maskedUri}`);
 
     const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
       autoIndex: true // Build indexes defined in schemas
     });
 

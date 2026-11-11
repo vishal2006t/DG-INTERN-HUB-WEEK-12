@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 const InputField = ({
@@ -20,7 +20,8 @@ const InputField = ({
   ...props
 }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const inputId = id || name || `field-${Math.random().toString(36).substr(2, 9)}`;
+  const generatedId = useId();
+  const inputId = id || name || generatedId;
   const isPassword = type === 'password';
   const effectiveType = isPassword ? (showPassword ? 'text' : 'password') : type;
 

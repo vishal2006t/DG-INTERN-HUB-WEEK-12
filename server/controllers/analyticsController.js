@@ -1,10 +1,39 @@
 import User from '../models/User.js';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
+import ContactMessage from '../models/ContactMessage.js';
 import { getConnectionStatus } from '../config/database.js';
 import { sendSuccess } from '../utils/helpers.js';
 
-// @desc    Get system-wide platform analytics (Admin only)
+// @desc    Get live public platform statistics (Homepage cards)
+// @route   GET /api/analytics/public
+// @access  Public
+export const getPublicStats = async (req, res, next) => {
+  try {
+    const [
+      activeInternships,
+      registeredCandidates,
+      distinctCompanies,
+      applicationsProcessed
+    ] = await Promise.all([
+      Job.countDocuments({ status: 'open' }),
+      User.countDocuments({ role: 'candidate' }),
+      Job.distinct('company', { status: 'open' }),
+      Application.countDocuments()
+    ]);
+
+    return sendSuccess(res, 200, 'Public platform metrics retrieved successfully', {
+      activeInternships,
+      registeredCandidates,
+      partnerCompanies: distinctCompanies.filter(Boolean).length,
+      applicationsProcessed
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get global platform statistics & analytics (Admin)
 // @route   GET /api/analytics/admin
 // @access  Private (Admin)
 export const getAdminAnalytics = async (req, res, next) => {
@@ -19,9 +48,12 @@ export const getAdminAnalytics = async (req, res, next) => {
       closedJobs,
       totalApplications,
       pendingApps,
+      reviewedApps,
       shortlistedApps,
       acceptedApps,
       rejectedApps,
+      totalInquiries,
+      openInquiries,
       categoryBreakdown,
       workTypeBreakdown,
       recentUsers,
@@ -36,9 +68,12 @@ export const getAdminAnalytics = async (req, res, next) => {
       Job.countDocuments({ status: 'closed' }),
       Application.countDocuments(),
       Application.countDocuments({ status: 'pending' }),
-      Application.countDocuments({ status: { $in: ['shortlisted', 'reviewed'] } }),
+      Application.countDocuments({ status: 'reviewed' }),
+      Application.countDocuments({ status: 'shortlisted' }),
       Application.countDocuments({ status: 'accepted' }),
       Application.countDocuments({ status: 'rejected' }),
+      ContactMessage.countDocuments(),
+      ContactMessage.countDocuments({ status: { $ne: 'resolved' } }),
       Job.aggregate([
         { $group: { _id: '$category', count: { $sum: 1 } } },
         { $sort: { count: -1 } }
@@ -74,9 +109,15 @@ export const getAdminAnalytics = async (req, res, next) => {
       applications: {
         total: totalApplications,
         pending: pendingApps,
-        shortlisted: shortlistedApps,
+        reviewed: reviewedApps,
+        shortlisted: shortlistedApps + reviewedApps,
+        shortlistedExact: shortlistedApps,
         accepted: acceptedApps,
         rejected: rejectedApps
+      },
+      inquiries: {
+        total: totalInquiries,
+        open: openInquiries
       },
       recentActivity: {
         users: recentUsers,
@@ -95,15 +136,13 @@ export const getAdminAnalytics = async (req, res, next) => {
   }
 };
 
-// @desc    Get recruiter-specific performance analytics
+// @desc    Get recruiter-specific statistics
 // @route   GET /api/analytics/recruiter
-// @access  Private (Recruiter, Admin)
+// @access  Private (Recruiter / Admin)
 export const getRecruiterAnalytics = async (req, res, next) => {
   try {
-    const isRecruiter = req.user.role === 'recruiter';
-    const jobFilter = isRecruiter ? { postedBy: req.user._id } : {};
-
-    const jobs = await Job.find(jobFilter).select('_id title applicantsCount status createdAt');
+    const jobFilter = req.user.role === 'admin' ? {} : { postedBy: req.user._id };
+    const jobs = await Job.find(jobFilter).select('_id status applicantsCount title').lean();
     const jobIds = jobs.map((j) => j._id);
 
     const [

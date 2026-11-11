@@ -56,6 +56,34 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    location: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    education: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    headline: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    lastLogin: {
+      type: Date,
+      default: null
+    },
+    notificationPreferences: {
+      emailUpdates: { type: Boolean, default: true },
+      applicationAlerts: { type: Boolean, default: true },
+      jobRecommendations: { type: Boolean, default: true }
     }
   },
   {

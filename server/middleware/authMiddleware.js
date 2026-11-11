@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { sendError } from '../utils/helpers.js';
+import { getJwtSecret } from '../config/jwt.js';
 
 export const authenticateUser = async (req, res, next) => {
   let token;
@@ -17,11 +18,15 @@ export const authenticateUser = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dg_interns_hub_jwt_fallback_secret');
+    const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.id).select('-password');
 
     if (!user) {
       return sendError(res, 401, 'User no longer exists');
+    }
+
+    if (user.isActive === false) {
+      return sendError(res, 403, 'Your account has been deactivated. Contact support.');
     }
 
     req.user = user;
@@ -45,9 +50,9 @@ export const optionalAuth = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dg_interns_hub_jwt_fallback_secret');
+    const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.id).select('-password');
-    if (user) {
+    if (user && user.isActive !== false) {
       req.user = user;
     }
   } catch {

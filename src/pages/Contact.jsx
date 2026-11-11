@@ -1,348 +1,299 @@
 import React, { useState } from 'react';
-import { Mail, MapPin, Send, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-
-const LinkedInIcon = ({ size = 22, className = '' }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-    <rect x="2" y="9" width="4" height="12" />
-    <circle cx="4" cy="4" r="2" />
-  </svg>
-);
-
-const GitHubIcon = ({ size = 22, className = '' }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-  </svg>
-);
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Clock,
+  Send,
+  CheckCircle2,
+  MessageSquare,
+  AlertCircle,
+} from 'lucide-react';
+import api from '../services/api';
+import { useToast } from '../hooks/useContexts';
+const FAQ_ITEMS = [
+  {
+    q: 'How quickly do recruiters review submitted internship applications?',
+    a: 'Most hiring teams review applications within 3–5 business days. You receive instant workspace notifications whenever your application status moves to Reviewed, Shortlisted, or Accepted.',
+  },
+  {
+    q: 'What file format is accepted for resumes?',
+    a: 'Only verified PDF files up to 5 MB are accepted across both Profile uploads and Job Applications to ensure consistent formatting and security.',
+  },
+  {
+    q: 'Can recruiters manage applicants directly inside the portal?',
+    a: 'Yes. Verified Recruiter accounts get a dedicated dashboard to publish roles, edit job requirements, review candidate profiles, add notes, update hiring statuses, and export applicants to CSV.',
+  },
+];
 
 const Contact = () => {
+  const toast = useToast();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     subject: '',
-    message: ''
+    message: '',
   });
-
   const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSent, setIsSent] = useState(false);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submittedRecord, setSubmittedRecord] = useState(null);
 
   const validate = () => {
-    const newErrors = {};
-    if (!formData.name.trim()) {
-      newErrors.name = 'Please provide your full name.';
-    }
+    const errs = {};
+    if (!formData.name.trim()) errs.name = 'Full name is required.';
     if (!formData.email.trim()) {
-      newErrors.email = 'Please provide your email address.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = 'Please provide a valid email address.';
+      errs.email = 'Email address is required.';
+    } else if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
+      errs.email = 'Please enter a valid email address.';
     }
-    if (!formData.message.trim()) {
-      newErrors.message = 'Please enter your message.';
-    } else if (formData.message.trim().length < 15) {
-      newErrors.message = 'Message must be at least 15 characters long.';
+    if (!formData.subject.trim()) errs.subject = 'Please specify a topic or subject.';
+    if (!formData.message.trim() || formData.message.trim().length < 10) {
+      errs.message = 'Please enter a message of at least 10 characters.';
     }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
     if (!validate()) return;
 
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSent(true);
-      setFormData({
-        name: '',
-        email: '',
-        subject: '',
-        message: ''
+    setSubmitting(true);
+    try {
+      const res = await api.contact.submit({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        subject: formData.subject.trim(),
+        message: formData.message.trim(),
       });
-    }, 600);
-  };
-
-  const handleReset = () => {
-    setFormData({
-      name: '',
-      email: '',
-      subject: '',
-      message: ''
-    });
-    setIsSent(false);
+      setSubmittedRecord(res?.data || { name: formData.name.trim(), email: formData.email.trim() });
+      setFormData({ name: '', email: '', subject: '', message: '' });
+      toast.success('Inquiry submitted! Our support team will respond shortly.');
+    } catch (err) {
+      const msg = err.message || 'Unable to submit message right now. Please try again.';
+      setSubmitError(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="page-wrapper contact-page">
-      {/* Header Section */}
-      <section className="contact-header-section">
-        <div className="container text-center">
-          <span className="section-eyebrow">Support & Inquiries</span>
-          <h1 className="contact-title">Get in Touch</h1>
+    <div className="page-wrapper">
+      <section className="contact-header-section" style={{ padding: '44px 0 32px', borderBottom: '1px solid var(--border-light)' }}>
+        <div className="container">
+          <span className="section-eyebrow">Support & Partnerships</span>
+          <h1 className="contact-title">Get In Touch With Our Team</h1>
           <p className="contact-subtitle">
-            Have a question about internships or applications? We'd love to hear from you.
+            Questions about verified internships, recruiter onboarding, or technical support? Send a direct inquiry logged right to our admin team.
           </p>
         </div>
       </section>
 
-      {/* Main Grid Section */}
-      <section className="contact-main-section">
+      <section className="contact-main-section" style={{ padding: '48px 0' }}>
         <div className="container">
           <div className="contact-grid">
-            {/* Left: Contact Info & Cards */}
-            <div className="contact-info-col">
-              <h2 className="contact-col-heading">Connect with Our Team</h2>
+            {/* Left Info Column */}
+            <div>
+              <h2 className="contact-col-heading">Direct Contact Channels</h2>
               <p className="contact-col-desc">
-                Whether you are a student inquiring about an internship application or an employer looking to onboard talent, our support team is here to assist you.
+                Reach out during business hours or submit the form for tracked support responses.
               </p>
 
               <div className="contact-cards-stack">
-                {/* Email Card */}
-                <a href="mailto:contact@dginternshub.com" className="contact-item-card">
-                  <div className="contact-icon-box">
-                    <Mail size={22} className="text-primary" />
-                  </div>
-                  <div className="contact-card-content">
-                    <span className="contact-card-label">Official Email</span>
-                    <span className="contact-card-value">contact@dginternshub.com</span>
-                    <span className="contact-card-sub">Response within 24 business hours</span>
-                  </div>
-                </a>
-
-                {/* LinkedIn Card */}
-                <a 
-                  href="https://linkedin.com/company/dg-interns-hub" 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="contact-item-card"
-                >
-                  <div className="contact-icon-box">
-                    <LinkedInIcon size={22} className="text-primary" />
-                  </div>
-                  <div className="contact-card-content">
-                    <span className="contact-card-label">LinkedIn Community</span>
-                    <span className="contact-card-value">linkedin.com/company/dg-interns-hub</span>
-                    <span className="contact-card-sub">Follow for daily internship updates</span>
-                  </div>
-                </a>
-
-                {/* GitHub Card */}
-                <a 
-                  href="https://github.com/dg-interns-hub" 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="contact-item-card"
-                >
-                  <div className="contact-icon-box">
-                    <GitHubIcon size={22} className="text-primary" />
-                  </div>
-                  <div className="contact-card-content">
-                    <span className="contact-card-label">GitHub Repository</span>
-                    <span className="contact-card-value">github.com/dg-interns-hub</span>
-                    <span className="contact-card-sub">Explore open-source sample codebases</span>
-                  </div>
-                </a>
-
-                {/* Office Card */}
                 <div className="contact-item-card">
                   <div className="contact-icon-box">
-                    <MapPin size={22} className="text-primary" />
+                    <Mail size={20} className="contact-icon" />
                   </div>
                   <div className="contact-card-content">
-                    <span className="contact-card-label">Hub Headquarters</span>
-                    <span className="contact-card-value">Electronic City Phase 1, Bengaluru</span>
-                    <span className="contact-card-sub">Karnataka 560100, India</span>
+                    <span className="contact-card-label">Support Email</span>
+                    <div className="contact-card-value">contact@dginternshub.com</div>
+                    <span className="contact-card-sub">General & candidate queries</span>
+                  </div>
+                </div>
+
+                <div className="contact-item-card">
+                  <div className="contact-icon-box">
+                    <Phone size={20} className="contact-icon" />
+                  </div>
+                  <div className="contact-card-content">
+                    <span className="contact-card-label">Helpline</span>
+                    <div className="contact-card-value">+91 98765 43210</div>
+                    <span className="contact-card-sub">Mon–Fri, 9:30 AM – 6:30 PM IST</span>
+                  </div>
+                </div>
+
+                <div className="contact-item-card">
+                  <div className="contact-icon-box">
+                    <MapPin size={20} className="contact-icon" />
+                  </div>
+                  <div className="contact-card-content">
+                    <span className="contact-card-label">Campus & Hiring Desk</span>
+                    <div className="contact-card-value">Bengaluru, Karnataka</div>
+                    <span className="contact-card-sub">HSR Layout Sector 2, India</span>
                   </div>
                 </div>
               </div>
 
-              {/* Working Hours */}
               <div className="support-hours-banner">
-                <Clock size={18} className="text-muted" />
-                <span>Student Support Hours: Monday to Friday, 9:00 AM – 6:00 PM IST</span>
+                <Clock size={16} />
+                <span>Average response time: under 24 business hours</span>
               </div>
             </div>
 
-            {/* Right: Contact Form */}
-            <div className="contact-form-col">
-              <div className="contact-form-card">
-                <h3 className="form-card-title">Send Us a Direct Message</h3>
-                <p className="form-card-subtitle">Fill in the form below and we'll reply to your email promptly.</p>
+            {/* Right Form Column */}
+            <div className="contact-form-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                <MessageSquare size={20} style={{ color: 'var(--primary)' }} />
+                <h2 className="form-card-title" style={{ margin: 0 }}>Send a Message</h2>
+              </div>
+              <p className="form-card-subtitle">
+                Every inquiry is saved and visible to platform administrators for timely follow-up.
+              </p>
 
-                {isSent ? (
-                  <div className="contact-success-state">
-                    <CheckCircle2 size={44} className="text-success" />
-                    <h4 className="success-state-title">Message Sent Successfully!</h4>
-                    <p className="success-state-desc">
-                      Thank you for contacting DG Interns Hub. Your message has been received and our student support desk will reply to your email shortly.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleReset}
-                      style={{ marginTop: '1rem' }}
-                    >
-                      Send Another Message
-                    </button>
+              {submittedRecord ? (
+                <div className="contact-success-state" style={{ padding: '24px 0', textAlign: 'center' }}>
+                  <div className="success-icon-wrap" style={{ margin: '0 auto 14px' }}>
+                    <CheckCircle2 size={34} />
                   </div>
-                ) : (
-                  <form onSubmit={handleSubmit} className="contact-form" noValidate>
-                    {/* Name */}
+                  <h3 className="success-state-title">Message Received!</h3>
+                  <p className="success-state-desc">
+                    Thank you, <strong>{submittedRecord.name}</strong>. Your inquiry has been logged and our team will reply to{' '}
+                    <strong>{submittedRecord.email}</strong>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSubmittedRecord(null)}
+                    className="btn btn-primary btn-sm"
+                    style={{ marginTop: '14px' }}
+                  >
+                    Send Another Inquiry
+                  </button>
+                </div>
+              ) : (
+                <form className="contact-form" onSubmit={handleSubmit} noValidate>
+                  {submitError && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--error-bg)',
+                        color: 'var(--error)',
+                        border: '1px solid var(--error-border)',
+                        fontSize: '0.86rem',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      <AlertCircle size={16} />
+                      <span>{submitError}</span>
+                    </div>
+                  )}
+
+                  <div className="form-row-2">
                     <div className="form-group">
                       <label htmlFor="contact-name" className="form-label">
-                        Your Full Name <span className="required-star">*</span>
+                        Full Name <span className="required-star">*</span>
                       </label>
                       <input
-                        type="text"
                         id="contact-name"
-                        name="name"
-                        placeholder="e.g. Ananya Roy"
+                        type="text"
                         className={`form-input ${errors.name ? 'has-error' : ''}`}
+                        placeholder="e.g. Aarav Sharma"
                         value={formData.name}
-                        onChange={handleChange}
+                        onChange={(e) => {
+                          setFormData((p) => ({ ...p, name: e.target.value }));
+                          if (errors.name) setErrors((p) => ({ ...p, name: '' }));
+                        }}
                       />
-                      {errors.name && (
-                        <span className="form-error-msg">
-                          <AlertCircle size={13} /> {errors.name}
-                        </span>
-                      )}
+                      {errors.name && <span className="form-error-msg">{errors.name}</span>}
                     </div>
 
-                    {/* Email */}
                     <div className="form-group">
                       <label htmlFor="contact-email" className="form-label">
                         Email Address <span className="required-star">*</span>
                       </label>
                       <input
-                        type="email"
                         id="contact-email"
-                        name="email"
-                        placeholder="ananya@college.edu"
+                        type="email"
                         className={`form-input ${errors.email ? 'has-error' : ''}`}
+                        placeholder="you@example.com"
                         value={formData.email}
-                        onChange={handleChange}
+                        onChange={(e) => {
+                          setFormData((p) => ({ ...p, email: e.target.value }));
+                          if (errors.email) setErrors((p) => ({ ...p, email: '' }));
+                        }}
                       />
-                      {errors.email && (
-                        <span className="form-error-msg">
-                          <AlertCircle size={13} /> {errors.email}
-                        </span>
-                      )}
+                      {errors.email && <span className="form-error-msg">{errors.email}</span>}
                     </div>
+                  </div>
 
-                    {/* Subject */}
-                    <div className="form-group">
-                      <label htmlFor="contact-subject" className="form-label">
-                        Subject / Topic
-                      </label>
-                      <input
-                        type="text"
-                        id="contact-subject"
-                        name="subject"
-                        placeholder="e.g. Application status inquiry or employer partnership"
-                        className="form-input"
-                        value={formData.subject}
-                        onChange={handleChange}
-                      />
-                    </div>
+                  <div className="form-group">
+                    <label htmlFor="contact-subject" className="form-label">
+                      Subject <span className="required-star">*</span>
+                    </label>
+                    <input
+                      id="contact-subject"
+                      type="text"
+                      className={`form-input ${errors.subject ? 'has-error' : ''}`}
+                      placeholder="e.g. Recruiter Verification / Internship Application Help"
+                      value={formData.subject}
+                      onChange={(e) => {
+                        setFormData((p) => ({ ...p, subject: e.target.value }));
+                        if (errors.subject) setErrors((p) => ({ ...p, subject: '' }));
+                      }}
+                    />
+                    {errors.subject && <span className="form-error-msg">{errors.subject}</span>}
+                  </div>
 
-                    {/* Message */}
-                    <div className="form-group">
-                      <label htmlFor="contact-message" className="form-label">
-                        Message <span className="required-star">*</span>
-                      </label>
-                      <textarea
-                        id="contact-message"
-                        name="message"
-                        rows={5}
-                        placeholder="Please write your questions or feedback here..."
-                        className={`form-textarea ${errors.message ? 'has-error' : ''}`}
-                        value={formData.message}
-                        onChange={handleChange}
-                      />
-                      {errors.message && (
-                        <span className="form-error-msg">
-                          <AlertCircle size={13} /> {errors.message}
-                        </span>
-                      )}
-                    </div>
+                  <div className="form-group">
+                    <label htmlFor="contact-message" className="form-label">
+                      Message <span className="required-star">*</span>
+                    </label>
+                    <textarea
+                      id="contact-message"
+                      rows={5}
+                      className={`form-input ${errors.message ? 'has-error' : ''}`}
+                      placeholder="Share details so we can assist quickly..."
+                      value={formData.message}
+                      onChange={(e) => {
+                        setFormData((p) => ({ ...p, message: e.target.value }));
+                        if (errors.message) setErrors((p) => ({ ...p, message: '' }));
+                      }}
+                    />
+                    {errors.message && <span className="form-error-msg">{errors.message}</span>}
+                  </div>
 
-                    {/* Submit Button */}
-                    <button
-                      type="submit"
-                      className="btn btn-primary btn-lg"
-                      style={{ width: '100%' }}
-                      disabled={isSubmitting}
-                      id="contact-submit-btn"
-                    >
-                      <Send size={16} />
-                      <span>{isSubmitting ? 'Sending Message...' : 'Send Message'}</span>
-                    </button>
-                  </form>
-                )}
-              </div>
+                  <button type="submit" disabled={submitting} className="btn btn-primary btn-lg" style={{ width: '100%' }}>
+                    <Send size={16} />
+                    <span>{submitting ? 'Sending Inquiry...' : 'Submit Inquiry'}</span>
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Frequently Asked Questions Mini Section */}
+      {/* FAQ Section */}
       <section className="contact-faq-section">
         <div className="container">
           <div className="section-header text-center">
-            <span className="section-eyebrow">Common Queries</span>
+            <span className="section-eyebrow">Quick Answers</span>
             <h2 className="section-title">Frequently Asked Questions</h2>
           </div>
 
           <div className="faq-cards-grid">
-            <div className="faq-card">
-              <h4 className="faq-question">Are all internships on DG Interns Hub paid?</h4>
-              <p className="faq-answer">
-                Yes. We strictly feature verified opportunities that offer a guaranteed monthly stipend. Unpaid internships are not listed on our platform.
-              </p>
-            </div>
-
-            <div className="faq-card">
-              <h4 className="faq-question">Can 1st or 2nd year students apply?</h4>
-              <p className="faq-answer">
-                Absolutely! Many partner organizations welcome passionate early-year undergraduates who demonstrate good problem-solving and fundamental skills.
-              </p>
-            </div>
-
-            <div className="faq-card">
-              <h4 className="faq-question">How soon will I hear back after applying?</h4>
-              <p className="faq-answer">
-                Employers review candidate profiles on a rolling basis. Most candidates receive initial feedback or screening invitations within 3 to 5 business days.
-              </p>
-            </div>
+            {FAQ_ITEMS.map((item, idx) => (
+              <div key={idx} className="faq-card">
+                <h3 className="faq-question">{item.q}</h3>
+                <p className="faq-answer">{item.a}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

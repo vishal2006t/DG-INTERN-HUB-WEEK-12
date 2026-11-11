@@ -120,6 +120,11 @@ const jobSchema = new mongoose.Schema(
       type: String,
       enum: ['open', 'closed', 'draft'],
       default: 'open'
+    },
+    experienceLevel: {
+      type: String,
+      enum: ['Fresher', '0-1 Years', '1-3 Years', '3+ Years'],
+      default: 'Fresher'
     }
   },
   {
@@ -135,6 +140,9 @@ jobSchema.index({ category: 1, workType: 1, createdAt: -1 });
 jobSchema.index({ type: 1, location: 1 });
 jobSchema.index({ deadline: 1 });
 jobSchema.index({ stipendAmount: -1 });
+jobSchema.index({ status: 1, experienceLevel: 1 });
+jobSchema.index({ status: 1, featured: -1, createdAt: -1 });
+jobSchema.index({ postedBy: 1, status: 1 });
 
 // Virtual id field matching _id string
 jobSchema.virtual('id').get(function () {
